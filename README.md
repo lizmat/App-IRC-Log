@@ -1,7 +1,9 @@
+[![Actions Status](https://github.com/lizmat/App-IRC-Log/workflows/test/badge.svg)](https://github.com/lizmat/App-IRC-Log/actions)
+
 NAME
 ====
 
-App::IRC::Log - blah blah blah
+App::IRC::Log - Cro application for presentating IRC logs
 
 SYNOPSIS
 ========
@@ -19,6 +21,8 @@ AUTHOR
 ======
 
 Elizabeth Mattijsen <liz@wenzperl.nl>
+
+Source can be located at: https://github.com/lizmat/App-IRC-Log . Comments and Pull Requests are welcome.
 
 COPYRIGHT AND LICENSE
 =====================
