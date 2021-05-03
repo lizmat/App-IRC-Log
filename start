@@ -1,0 +1,24 @@
+#!/usr/bin/env raku
+
+use lib 'lib';
+use IRC::Log::Colabti;
+use Cro::HTTP::Server;
+use App::IRC::Log;
+
+my $ail := App::IRC::Log.new:
+  log-class     => IRC::Log::Colabti,
+  log-dir       => "logs",
+  html-dir      => "html",
+  templates-dir => "templates",
+;
+
+my $application := $ail.application;
+
+my $service := Cro::HTTP::Server.new:
+  :host<localhost>,
+  :port<10000>,
+  :application($ail.application),
+;
+$service.start;
+
+react whenever signal(SIGINT) { $service.stop; exit; }

@@ -1,0 +1,6 @@
+use Test;
+use App::IRC::Log;
+
+pass "replace me";
+
+done-testing;

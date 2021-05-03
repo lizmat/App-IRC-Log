@@ -1,0 +1,31 @@
+{
+  "auth": "cpan:ELIZABETH",
+  "authors": [
+    "Elizabeth Mattijsen"
+  ],
+  "build-depends": [
+  ],
+  "depends": [
+    "Cro::HTTP::Router",
+    "Cro::WebApp::Template",
+    "IRC::Channel::Log",
+    "RandomColor"
+  ],
+  "description": "Cro application for presentating IRC logs",
+  "license": "Artistic-2.0",
+  "name": "App::IRC::Log",
+  "perl": "6.d",
+  "provides": {
+    "App::IRC::Log": "lib/App/IRC/Log.rakumod"
+  },
+  "resources": [
+  ],
+  "source-url": "",
+  "tags": [
+  ],
+  "test-depends": [
+    "Cro::HTTP::Server",
+    "IRC::Log::Colabti"
+  ],
+  "version": "0.0.1"
+}

@@ -1,0 +1,51 @@
+<html>
+<head>
+  <title>Log of #<.channel> on <.date-human></title>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <link rel="stylesheet" type="text/css" href="style.css" title="Irclog Stylesheet">
+</head>
+<body>
+  <h1>Log of #<.channel> on <.date-human></h1>
+  </hr>
+  <&links($_)>
+  </hr>
+  <table class="chat" valign="top">
+    <tr class="head">
+      <th>Time</th>
+      <th>Nick</th>
+      <th>Message</th>
+    </tr>
+    <@entries>
+      <tr class="<?.conversation>talk odd</?><!.conversation>special</!>" id="<.target>">
+        <td class="time"><a href="#<.target>"><.hh-mm></a></td>
+        <td class="nick"><&HTML(.sender)></td>
+        <td class="message"><&HTML(.message)></td>
+      </tr>
+    </@>
+  </table>
+  <hr>
+  <&links($_)>
+  <div id="footer">Powered by the <a href="https://raku.org">Raku Programming Language</a></div>
+</body>
+</html>
+
+<:sub links($_)>
+<p>
+<table width="100%">
+  <tr>
+    <td> 
+      <a href="logs.html">Logs</a> 
+      <a href="../channels.html">Channels</a>
+      <a href="../help.html">Help</a> 
+      <a href="search.html">Search</a> 
+      <?.prev-date><a href="<.prev-date>.html">&larr;Prev date</a></?>
+      <?.next-date><a href="<.next-date>.html">Next date&rarr;</a></?>
+    </td>
+    <td align="right">
+      <a href="<.date>.log">Raw</a>
+      <a href="help.html">Help</a>
+    </td>
+  </tr>
+</table>
+</p>
+</:>
