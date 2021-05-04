@@ -63,9 +63,10 @@ dd $io.absolute;
     }
 }
 
-subset HTML of Str where *.ends-with('.html');
-subset CSS  of Str where *.ends-with('.css');
-subset LOG  of Str where *.ends-with('.log');
+subset HTML of Str  where *.ends-with('.html');
+subset DAY  of HTML where try *.IO.basename.substr(0,10).Date;
+subset CSS  of Str  where *.ends-with('.css');
+subset LOG  of Str  where *.ends-with('.log');
 
 my constant @months = <?
   January February March April May June July
@@ -165,9 +166,11 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     has         &.htmlize     = &htmlize;
     has         &.nicks2color = &nicks2color;
     has Instant $.liftoff     = $?FILE.words.head.IO.modified;
-    has         @.channels    = $!log-dir.dir.map: *.basename;
+    has         @.channels    = $!log-dir.dir.map({
+                                    .basename if .d && !.basename.starts-with('.')
+                                }).sort;
 
-    method !day-file($channel, $date) {
+    method !day($channel, $date) {
         if try $date.Date -> $Date {
             my $dir  := $!html-dir.add($channel).add($Date.year);
             my $html := $dir.add($date ~ '.html');
@@ -240,8 +243,8 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
 
     method application() {
         route {
-            get -> $channel, HTML $file {
-                serve-static self!day-file($channel, $file.substr(0,*-5));
+            get -> $channel, DAY $file {
+                serve-static self!day($channel, $file.substr(0,*-5));
             }
             get -> $channel, CSS $file {
                 my $io := $!html-dir.add($channel).add($file);

@@ -7,7 +7,7 @@
 <body>
   <h1>Log of #<.channel> on <.date-human></h1>
   </hr>
-  <&links($_)>
+  <&links($_, .channel, .date)>
   </hr>
   <table class="chat" valign="top">
     <tr class="head">
@@ -24,12 +24,12 @@
     </@>
   </table>
   <hr>
-  <&links($_)>
-  <div id="footer">Powered by the <a href="https://raku.org">Raku Programming Language</a></div>
+  <&links($_, .channel, .date)>
+  <div id="footer">Powered by <a href="https://cro.services">Cro</a> and the <a href="https://raku.org">Raku Programming Language</a></div>
 </body>
 </html>
 
-<:sub links($_)>
+<:sub links($_, $channel, $date)>
 <p>
 <table width="100%">
   <tr>
@@ -40,6 +40,16 @@
       <a href="search.html">Search</a> 
       <?.prev-date><a href="<.prev-date>.html">&larr;Prev date</a></?>
       <?.next-date><a href="<.next-date>.html">Next date&rarr;</a></?>
+    </td>
+    <td align="right">
+      <form>
+      <label for="channel">Channel</label>
+      <select name="channel" id="channel">
+        <@channels>
+          <option value="../<$_>/<$date>.html"<?{ $_ eq $channel }> selected</?>><$_></option>
+        </@>
+      </select>
+      </form>
     </td>
     <td align="right">
       <a href="<.date>.log">Raw</a>
