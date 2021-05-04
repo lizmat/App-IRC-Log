@@ -45,26 +45,29 @@ sub may-serve-gzip() {
     accept-encoding.contains('gzip')
 }
 
-sub serve-static(IO:D $io is copy, |c) {
-dd $io.absolute;
-    if $io.e {
-#        if may-serve-gzip() {
-#dd "serving zipped";
-#            header 'Transfer-Encoding', 'gzip';
-#            static gzip($io).absolute, |c, :mime-types({ 'gz' => mime-type($io) });
-#            content mime-type($io), gzip($io).slurp(:bin);
-#        }
-#        else {
-            static $io.absolute, |c;
-#        }
-    }
-    else {
-        not-found;
-    }
+sub render(IO:D $dir, IO:D $html, IO:D $crot, %_) {
+    $dir.mkdir;
+    $html.spurt:
+    render-template $crot, %_;
+    gzip($html);
 }
 
+multi sub serve-static(IO:D $io is copy, *%_) {
+dd $io.absolute;
+#    if may-serve-gzip() {
+#dd "serving zipped";
+#        header 'Transfer-Encoding', 'gzip';
+#        static gzip($io).absolute, |c, :mime-types({ 'gz' => mime-type($io) });
+#        content mime-type($io), gzip($io).slurp(:bin);
+#    }
+#    else {
+            static $io.absolute, |%_;
+#    }
+}
+multi sub serve-static($, *%) { not-found }
+
 subset HTML of Str  where *.ends-with('.html');
-subset DAY  of HTML where try *.IO.basename.substr(0,10).Date;
+subset DAY  of HTML where { try .IO.basename.substr(0,10).Date }
 subset CSS  of Str  where *.ends-with('.css');
 subset LOG  of Str  where *.ends-with('.log');
 
@@ -114,7 +117,10 @@ my constant @delimiters = ' ', '<', '>', |< : ; , + >;
 sub htmlize($entry, %color) {
     my $text = $entry.message;
 
+    # Something with a text
     if $entry.conversation {
+
+        # An invocation of Camelia, assume it's code
         if $text.starts-with("m: ") {
             $text = $text.substr(0,3)
               ~ '<div id="code">'
@@ -122,12 +128,16 @@ sub htmlize($entry, %color) {
               ~ '</div>';
         }
 
+        # Do the various tweaks
         else {
+
+            # URL linking
             $text .= subst(
               / https? '://' \S+ /,
               { '<a href="' ~ $/~ '">' ~ $/ ~ '</a>' }
             );
 
+            # Nick highlighting
             if $entry.^name.ends-with("Topic") {
                 $text .= subst(/ ^ \S+ /, { %color{$/} // $/ });
             }
@@ -139,12 +149,15 @@ sub htmlize($entry, %color) {
                 }).join;
             }
 
+            # Thought highlighting
             if $entry.^name.ends-with("Self-Reference")
               || $text.starts-with(".oO(") {
                 $text = '<div id="thought">' ~ $text ~ '</div>'
             }
         }
     }
+
+    # No text, just do the nick highlighting
     else {
         $text .= subst(/^ \S+ /, { %color{$/} // $/ });
 
@@ -170,91 +183,124 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                                     .basename if .d && !.basename.starts-with('.')
                                 }).sort;
 
-    method !day($channel, $date) {
-        if try $date.Date -> $Date {
-            my $dir  := $!html-dir.add($channel).add($Date.year);
-            my $html := $dir.add($date ~ '.html');
-            my $crot := $!templates-dir.add('day.crotmp');
+    # Return IO object for given channel and day
+    method !day($channel, $file --> IO:D) {
+        my $date := $file.chop(5);
+        my $Date := $date.Date;
+        my $dir  := $!html-dir.add($channel).add($Date.year);
+        my $html := $dir.add($date ~ '.html');
+        my $crot := $!templates-dir.add('day.crotmp');
 
-            if !$html.e                           # file does not exist
-              || $html.modified < $!liftoff       # file is too old
-                                | $crot.modified  # template changed
-            {
-                my $log   := $!log-class.new(
-                  $!log-dir.add($channel).add($Date.year).add($date)
-                );
-                my %color := &!nicks2color($log.nicks.keys);
+        # Need to (re-)render
+        if !$html.e                           # file does not exist
+          || $html.modified < $!liftoff       # file is too old
+                            | $crot.modified  # or template changed
+        {
 
-                # Set up entries for use in template
-                my @entries = $log.entries.map: {
-                    Hash.new((
-                      control      => .control,
-                      conversation => .conversation,
-                      hh-mm        => .hh-mm,
-                      hour         => .hour,
-                      message      =>  &!htmlize($_, %color),
-                      minute       => .minute,
-                      ordinal      => .ordinal,
-                      target       => .target.substr(11),  # no need for Date
-                      sender       =>  %color{.sender},
-                    ))
-                }
+            # Fetch the log and nick coloring
+            my $log := $!log-class.new(
+              $!log-dir.add($channel).add($Date.year).add($date)
+            );
+            my %color := &!nicks2color($log.nicks.keys);
 
-                # Merge control messages inside the same minute
-                my $merging;
-                for @entries.kv -> $index, %entry {
-                    if %entry<ordinal> {
-                        if %entry<control> {
-                            if $merging || @entries[$index - 1]<control> {
-                                $merging = $index - 1 without $merging;
-                                @entries[$merging]<message> ~= ", %entry<message>";
-                                @entries[$index] = Any;
-                            }
-                        }
-                        else {
-                            $merging = Any;
+            # Set up entries for use in template
+            my @entries = $log.entries.map: {
+                Hash.new((
+                  control      => .control,
+                  conversation => .conversation,
+                  hh-mm        => .hh-mm,
+                  hour         => .hour,
+                  message      =>  &!htmlize($_, %color),
+                  minute       => .minute,
+                  ordinal      => .ordinal,
+                  target       => .target.substr(11),  # no need for Date
+                  sender       =>  %color{.sender},
+                ))
+            }
+
+            # Merge control messages inside the same minute
+            my $merging;
+            for @entries.kv -> $index, %entry {
+                if %entry<ordinal> {
+                    if %entry<control> {
+                        if $merging || @entries[$index - 1]<control> {
+                            $merging = $index - 1 without $merging;
+                            @entries[$merging]<message> ~= ", %entry<message>";
+                            @entries[$index] = Any;
                         }
                     }
                     else {
                         $merging = Any;
                     }
                 }
-                @entries = @entries.grep(*.defined);
-
-                $dir.mkdir;
-                $html.spurt:
-                  render-template $crot, {
-                    :$channel,
-                    :@!channels,
-                    :$date,
-                    :date-human("$Date.day() @months[$Date.month] $Date.year()"),
-                    :next-date($Date.later(:1day)),
-                    :prev-date($Date.earlier(:1day)),
-                    :@entries
+                else {
+                    $merging = Any;
                 }
-                gzip($html);
+            }
+            @entries = @entries.grep(*.defined);
+
+            # Render it!
+            render $dir, $html, $crot, {
+              :$channel,
+              :@!channels,
+              :$date,
+              :date-human("$Date.day() @months[$Date.month] $Date.year()"),
+              :next-date($Date.later(:1day)),
+              :prev-date($Date.earlier(:1day)),
+              :@entries
+            }
+        }
+        $html
+    }
+
+    # Return an IO object for other HTML files
+    method !html($channel, $file --> IO:D) {
+        my $template := $file.chop(5) ~ '.crotmp';
+
+        my $dir  := $!html-dir.add($channel);
+        my $html := $dir.add($file);
+        my $crot := $!templates-dir.add($channel).add($template);
+        $crot := $!templates-dir.add($template) unless $crot.e;
+
+        # No template, if there's bare HTML, serve it
+        if !$crot.e {
+            $html.e ?? $html !! Nil
+        }
+
+        # May need to render
+        else {
+            if !$html.e                           # file does not exist
+              || $html.modified < $!liftoff       # file is too old
+                                | $crot.modified  # or template changed
+            {
+                render $dir, $html, $crot, {
+                  :$channel,
+                }
             }
             $html
         }
-        else {
-            Nil
-        }
     }
 
+    # Return the actual Cro application to be served
     method application() {
+        subset CHANNEL of Str where { $_ (elem) @!channels }
+
         route {
-            get -> $channel, DAY $file {
-                serve-static self!day($channel, $file.substr(0,*-5));
+            get -> CHANNEL $channel, DAY $file {
+                serve-static self!day($channel, $file);
             }
-            get -> $channel, CSS $file {
+            get -> CHANNEL $channel, HTML $file {
+                serve-static self!html($channel, $file);
+            }
+            get -> CHANNEL $channel, CSS $file {
                 my $io := $!html-dir.add($channel).add($file);
                 serve-static $io.e ?? $io !! $!html-dir.add($file)
             }
-            get -> $channel, LOG $file {
+            get -> CHANNEL $channel, LOG $file {
                 my $io := $!log-dir
                   .add($channel)
                   .add($file.substr(0,4))
-                  .add($file.substr(0,*-4));
+                  .add($file.chop(4));
 
                 serve-static $io, :%mime-types
             }
