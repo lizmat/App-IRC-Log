@@ -25,80 +25,89 @@ sub nicks2color(@nicks) {
 # delimiters in message to find nicks
 my constant @delimiters = ' ', '<', '>', |< : ; , + >;
 
-class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
-    has      $.log-class     is required is built(:bind);
-    has IO() $.log-dir       is required;
-    has IO() $.html-dir      is required;
-    has IO() $.templates-dir is required;
-    has      @.channels = $!log-dir.dir.map: *.basename;
+sub htmlize($entry, %color) {
+    my $text = $entry.message;
 
-    sub htmlize-message($entry, %color) {
-        my $text = $entry.message;
-
-        if $entry.conversation {
-            if $text.starts-with("m: ") {
-                $text = $text.substr(0,3)
-                  ~ '<div id="code">'
-                  ~ $text.substr(3)
-                  ~ '</div>';
-            }
-
-            else {
-                $text .= subst(
-                  / https? '://' \S+ /,
-                  { '<a href="' ~ $/~ '">' ~ $/ ~ '</a>' }
-                );
-
-                if $entry.^name.ends-with("Topic") {
-                    $text .= subst(/ ^ \S+ /, { %color{$/} // $/ });
-                }
-                else {
-                    $text = $text.split(@delimiters, :v).map(-> $word, $del = '' {
-                        $word
-                          ?? (%color{$word} // $word) ~ $del
-                          !! $del
-                    }).join;
-                }
-
-                if $text.starts-with(".oO(") {
-                    $text = '<div id="thought">' ~ $text ~ '</div>'
-                }
-            }
+    if $entry.conversation {
+        if $text.starts-with("m: ") {
+            $text = $text.substr(0,3)
+              ~ '<div id="code">'
+              ~ $text.substr(3)
+              ~ '</div>';
         }
+
         else {
-            $text .= subst(/^ \S+ /, { %color{$/} // $/ });
+            $text .= subst(
+              / https? '://' \S+ /,
+              { '<a href="' ~ $/~ '">' ~ $/ ~ '</a>' }
+            );
 
-            if $entry.^name.ends-with("Nick-Change") {
-                $text .= subst(/ \S+ $/, { %color{$/} // $/ });
+            if $entry.^name.ends-with("Topic") {
+                $text .= subst(/ ^ \S+ /, { %color{$/} // $/ });
             }
-            elsif $entry.^name.ends-with("Kick") {
-                $text .= subst(/ \S+ $/, { %color{$/} // $/ }, :5th)
+            else {
+                $text = $text.split(@delimiters, :v).map(-> $word, $del = '' {
+                    $word
+                      ?? (%color{$word} // $word) ~ $del
+                      !! $del
+                }).join;
+            }
+
+            if $entry.^name.ends-with("Self-Reference")
+              || $text.starts-with(".oO(") {
+                $text = '<div id="thought">' ~ $text ~ '</div>'
             }
         }
-        $text
     }
+    else {
+        $text .= subst(/^ \S+ /, { %color{$/} // $/ });
+
+        if $entry.^name.ends-with("Nick-Change") {
+            $text .= subst(/ \S+ $/, { %color{$/} // $/ });
+        }
+        elsif $entry.^name.ends-with("Kick") {
+            $text .= subst(/ \S+ $/, { %color{$/} // $/ }, :5th)
+        }
+    }
+    $text
+}
+
+class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
+    has         $.log-class     is required is built(:bind);
+    has IO()    $.log-dir       is required;
+    has IO()    $.html-dir      is required;
+    has IO()    $.templates-dir is required;
+    has         &.htmlize     = &htmlize;
+    has         &.nicks2color = &nicks2color;
+    has Instant $.liftoff     = $?FILE.words.head.IO.modified;
+    has         @.channels    = $!log-dir.dir.map: *.basename;
 
     method !day-file($channel, $date) {
         if try $date.Date -> $Date {
-            my $dir := $!html-dir.add($channel).add($Date.year);
-            my $io  := $dir.add($date ~ '.html');
+            my $dir  := $!html-dir.add($channel).add($Date.year);
+            my $html := $dir.add($date ~ '.html');
+            my $crot := $!templates-dir.add('day.crotmp');
 
-            unless $io.e {
+            if !$html.e                           # file does not exist
+              || $html.modified < $!liftoff       # file is too old
+                                | $crot.modified  # template changed
+            {
                 my $log   := $!log-class.new(
                   $!log-dir.add($channel).add($Date.year).add($date)
                 );
-                my %color := nicks2color($log.nicks.keys);
+                my %color := &!nicks2color($log.nicks.keys);
 
+                # Set up entries for use in template
                 my @entries = $log.entries.map: {
                     Hash.new((
                       control      => .control,
                       conversation => .conversation,
                       hh-mm        => .hh-mm,
                       hour         => .hour,
-                      message      =>  htmlize-message($_, %color),
+                      message      =>  &!htmlize($_, %color),
                       minute       => .minute,
                       ordinal      => .ordinal,
-                      target       => .target.substr(11),
+                      target       => .target.substr(11),  # no need for Date
                       sender       =>  %color{.sender},
                     ))
                 }
@@ -125,17 +134,19 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                 @entries = @entries.grep(*.defined);
 
                 $dir.mkdir;
-                $io.spurt:
-                  render-template $!templates-dir.add('day.crotmp'), {
+                $html.spurt:
+                  render-template $crot, {
                     :$channel,
+                    :@!channels,
                     :$date,
                     :date-human("$Date.day() @months[$Date.month] $Date.year()"),
                     :next-date($Date.later(:1day)),
                     :prev-date($Date.earlier(:1day)),
                     :@entries
                 }
+                run 'gzip', '--keep', '--force', $html.absolute;
             }
-            $io
+            $html
         }
         else {
             Nil
