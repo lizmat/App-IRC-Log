@@ -68,6 +68,7 @@ multi sub serve-static($, *%) { not-found }
 
 subset HTML of Str  where *.ends-with('.html');
 subset DAY  of HTML where { try .IO.basename.substr(0,10).Date }
+subset DATE of Str  where { try .Date }
 subset CSS  of Str  where *.ends-with('.css');
 subset LOG  of Str  where *.ends-with('.log');
 
@@ -176,12 +177,14 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     has IO()    $.log-dir       is required;
     has IO()    $.html-dir      is required;
     has IO()    $.templates-dir is required;
-    has         &.htmlize     = &htmlize;
-    has         &.nicks2color = &nicks2color;
-    has Instant $.liftoff     = $?FILE.words.head.IO.modified;
-    has         @.channels    = $!log-dir.dir.map({
-                                    .basename if .d && !.basename.starts-with('.')
-                                }).sort;
+    has         &.htmlize      is built(:bind) = &htmlize;
+    has         &.nicks2color  is built(:bind) = &nicks2color;
+    has Instant $.liftoff      is built(:bind) = $?FILE.words.head.IO.modified;
+    has Lock    $!channel-lock is built(:bind) = Lock.new;
+    has         %!channels;
+    has         @.channels = $!log-dir.dir.map({
+                                 .basename if .d && !.basename.starts-with('.')
+                             }).sort;
 
     # Return IO object for given channel and day
     method !day($channel, $file --> IO:D) {
@@ -198,9 +201,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         {
 
             # Fetch the log and nick coloring
-            my $log := $!log-class.new(
-              $!log-dir.add($channel).add($Date.year).add($date)
-            );
+            my $log   := self.log($channel).log($date);
             my %color := &!nicks2color($log.nicks.keys);
 
             # Set up entries for use in template
@@ -281,11 +282,47 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         }
     }
 
+    # Return IRC::Channel::Log object for given channel
+    method log(str $channel) {
+        $!channel-lock.protect: {
+            %!channels{$channel} //= IRC::Channel::Log.new:
+              logdir => $!log-dir.add($channel),
+              class  => $!log-class,
+              name   => $channel;
+        }
+    }
+
     # Return the actual Cro application to be served
     method application() {
         subset CHANNEL of Str where { $_ (elem) @!channels }
 
         route {
+            get -> CHANNEL $channel, DAY $file {
+                serve-static self!day($channel, $file);
+            }
+            get -> CHANNEL $channel, 'today' {
+                redirect "/$channel/"
+                  ~ self.log($channel).this-date(now.Date.Str)
+                  ~ '.html';
+            }
+            get -> CHANNEL $channel, 'prev', DATE $date {
+                redirect "/$channel/"
+                  ~ self.log($channel).prev-date($date)
+                  ~ '.html',
+                :permanent
+            }
+            get -> CHANNEL $channel, 'this', DATE $date {
+                redirect "/$channel/"
+                  ~ self.log($channel).this-date($date)
+                  ~ '.html',
+                :permanent
+            }
+            get -> CHANNEL $channel, 'next', DATE $date {
+                redirect "/$channel/"
+                  ~ self.log($channel).next-date($date)
+                  ~ '.html',
+                :permanent
+            }
             get -> CHANNEL $channel, DAY $file {
                 serve-static self!day($channel, $file);
             }

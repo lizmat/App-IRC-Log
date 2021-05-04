@@ -2,7 +2,7 @@
 <head>
   <title>Log of #<.channel> on <.date-human></title>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <link rel="stylesheet" type="text/css" href="style.css" title="Irclog Stylesheet">
+  <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
   <h1>Log of #<.channel> on <.date-human></h1>
@@ -33,13 +33,15 @@
 <p>
 <table width="100%">
   <tr>
-    <td> 
-      <a href="logs.html">Logs</a> 
-      <a href="../channels.html">Channels</a>
-      <a href="../help.html">Help</a> 
-      <a href="search.html">Search</a> 
-      <?.prev-date><a href="<.prev-date>.html">&larr;Prev date</a></?>
-      <?.next-date><a href="<.next-date>.html">Next date&rarr;</a></?>
+    <td align="center"> 
+      <a href="prev/<.date>"><span style="font-weight: bold">&larr;</span></a>
+      &nbsp;
+      <a href="today"><span style="font-weight: bold">Today</span></a>
+      &nbsp;
+      <a href="next/<.date>"><span style="font-weight: bold">&rarr;</span></a>
+    </td>
+    <td>
+      Search <input></input>
     </td>
     <td align="right">
       <form>
