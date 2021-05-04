@@ -1,5 +1,6 @@
 use v6.*;
 
+use Array::Sorted::Util;
 use Cro::HTTP::Router;
 use Cro::WebApp::Template;
 use IRC::Channel::Log;
@@ -71,11 +72,38 @@ my constant @months = <?
   August September October November December
 >;
 
-# return Map with nicks mapped to HTML snippet with colorized nick
+# Return Map with nicks mapped to HTML snippet with colorized nick
 sub nicks2color(@nicks) {
-    Map.new(( '','', @nicks.map: -> $nick {
-        my $color := RandomColor.new(:luminosity<bright>).list.head;
-        $nick => '<span style="color: ' ~ $color ~ '">' ~ $nick ~ '</span>'
+    my str @seen  = '';
+    my str @color = '';
+
+    # Set up nicks with associated colors, using the same color for
+    # nicks that are probably aliases (because they share the same
+    # root)
+    for @nicks.sort(-*.chars) -> $nick {
+        my $pos   := finds @seen, $nick;
+        my $found := @seen[$pos];
+
+        inserts
+          @seen,  $nick,
+          @color, $found && $found.starts-with($nick)
+            ?? @color[$pos]
+            !! RandomColor.new(:luminosity<bright>).list.head;
+     }
+
+     # Turn the mapping into nick -> HTML mapping
+     Map.new(( (^@seen).map: -> int $pos {
+        if @color[$pos] -> $color {
+            $_ => '<span style="color: '
+                    ~ $color
+                    ~ '">'
+                    ~ $_
+                    ~ '</span>'
+            given @seen[$pos]
+        }
+        else {
+            '' => ''
+        }
     }))
 }
 

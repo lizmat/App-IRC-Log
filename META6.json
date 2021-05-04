@@ -6,6 +6,7 @@
   "build-depends": [
   ],
   "depends": [
+    "Array::Sorted::Util",
     "Cro::HTTP::Router",
     "Cro::WebApp::Template",
     "IRC::Channel::Log",
