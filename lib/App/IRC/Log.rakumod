@@ -5,6 +5,63 @@ use Cro::WebApp::Template;
 use IRC::Channel::Log;
 use RandomColor;
 
+my constant %mime-types = Map.new((
+  ''   => 'text/text',
+  css  => 'text/css',
+  html => 'text/html',
+  ico  => 'image/x-icon',
+));
+my constant $default-mime-type = %mime-types{''};
+
+sub mime-type(IO:D $io) {
+    my $basename := $io.basename;
+    with $basename.rindex('.') {
+        %mime-types{$basename.substr($_ + 1)}
+          // $default-mime-type
+    }
+    else {
+        $default-mime-type
+    }
+}
+
+sub gzip(IO:D $io) {
+    my $gzip := $io.sibling($io.basename ~ '.gz');
+    run('gzip', '--keep', '--force', $io.absolute)
+      if !$gzip.e || $gzip.modified < $io.modified;
+    $gzip
+}
+
+sub accept-encoding() {
+    with request.headers.first: *.name eq 'Accept-Encoding' {
+        .value
+    }
+    else {
+        ''
+    }
+}
+
+sub may-serve-gzip() {
+    accept-encoding.contains('gzip')
+}
+
+sub serve-static(IO:D $io is copy, |c) {
+dd $io.absolute;
+    if $io.e {
+#        if may-serve-gzip() {
+#dd "serving zipped";
+#            header 'Transfer-Encoding', 'gzip';
+#            static gzip($io).absolute, |c, :mime-types({ 'gz' => mime-type($io) });
+#            content mime-type($io), gzip($io).slurp(:bin);
+#        }
+#        else {
+            static $io.absolute, |c;
+#        }
+    }
+    else {
+        not-found;
+    }
+}
+
 subset HTML of Str where *.ends-with('.html');
 subset CSS  of Str where *.ends-with('.css');
 subset LOG  of Str where *.ends-with('.log');
@@ -144,7 +201,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                     :prev-date($Date.earlier(:1day)),
                     :@entries
                 }
-                run 'gzip', '--keep', '--force', $html.absolute;
+                gzip($html);
             }
             $html
         }
@@ -156,19 +213,11 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     method application() {
         route {
             get -> $channel, HTML $file {
-                my $io := self!day-file($channel, $file.substr(0,*-5));
-
-                $io.e
-                  ?? static $io.absolute
-                  !! not-found
+                serve-static self!day-file($channel, $file.substr(0,*-5));
             }
             get -> $channel, CSS $file {
                 my $io := $!html-dir.add($channel).add($file);
-                $io.e
-                  ?? static $io.absolute
-                  !! ($io := $!html-dir.add($file)).e
-                    ?? static $io.absolute
-                    !! not-found
+                serve-static $io.e ?? $io !! $!html-dir.add($file)
             }
             get -> $channel, LOG $file {
                 my $io := $!log-dir
@@ -176,12 +225,10 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                   .add($file.substr(0,4))
                   .add($file.substr(0,*-4));
 
-                $io.e
-                  ?? static $io.absolute, :mime-types({ '' => 'text/text' })
-                  !! not-found
+                serve-static $io, :%mime-types
             }
             get -> $file {
-                static $!html-dir, $file
+                serve-static $!html-dir.add($file)
             }
             get -> |c {
                 dd c;
