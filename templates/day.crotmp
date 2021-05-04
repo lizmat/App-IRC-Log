@@ -48,7 +48,7 @@
       <label for="channel">Channel</label>
       <select name="channel" id="channel">
         <@channels>
-          <option value="../<$_>/<$date>.html"<?{ $_ eq $channel }> selected</?>><$_></option>
+          <option value="/<$_>/this/<$date>"<?{ $_ eq $channel }> selected</?>><$_></option>
         </@>
       </select>
       </form>

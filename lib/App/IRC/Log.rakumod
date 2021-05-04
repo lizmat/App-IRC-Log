@@ -297,31 +297,35 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         subset CHANNEL of Str where { $_ (elem) @!channels }
 
         route {
-            get -> CHANNEL $channel, DAY $file {
-                serve-static self!day($channel, $file);
-            }
             get -> CHANNEL $channel, 'today' {
                 redirect "/$channel/"
                   ~ self.log($channel).this-date(now.Date.Str)
                   ~ '.html';
             }
             get -> CHANNEL $channel, 'prev', DATE $date {
-                redirect "/$channel/"
-                  ~ self.log($channel).prev-date($date)
-                  ~ '.html',
-                :permanent
+                with self.log($channel).prev-date($date) -> $prev {
+                    redirect "/$channel/$prev.html", :permanent
+                }
+                else {
+                    redirect "/$channel/$date.html"
+                }
             }
             get -> CHANNEL $channel, 'this', DATE $date {
                 redirect "/$channel/"
-                  ~ self.log($channel).this-date($date)
-                  ~ '.html',
-                :permanent
+                  ~ self.log($channel).this-date($date.Str)
+                  ~ '.html';
             }
             get -> CHANNEL $channel, 'next', DATE $date {
-                redirect "/$channel/"
-                  ~ self.log($channel).next-date($date)
-                  ~ '.html',
-                :permanent
+                with self.log($channel).next-date($date) -> $next {
+                    redirect "/$channel/$next.html", :permanent
+                }
+                else {
+                    redirect "/$channel/$date.html"
+                }
+            }
+
+            get -> CHANNEL $channel, DAY $file {
+                serve-static self!day($channel, $file);
             }
             get -> CHANNEL $channel, DAY $file {
                 serve-static self!day($channel, $file);
@@ -344,6 +348,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             get -> $file {
                 serve-static $!html-dir.add($file)
             }
+
             get -> |c {
                 dd c;
                 not-found
