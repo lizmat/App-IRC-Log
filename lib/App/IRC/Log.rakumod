@@ -305,11 +305,11 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
               :next-year($date.substr(0,4).succ),
               :prev-date($Date.earlier(:1day)),
               :prev-month($clog.is-first-date-of-month($date)
-                ?? $date.substr(0,7).pred
+                ?? "prev/$Date.earlier(:1month).first-date-in-month()"
                 !! $date.substr(0,7)
               ),
               :prev-year($clog.is-first-date-of-year($date)
-                ?? $date.substr(0,4).pred
+                ?? 'prev/' ~ Date.new($Date.year - 1, 1, 1)
                 !! $date.substr(0,4)
               ),
               :@entries

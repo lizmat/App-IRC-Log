@@ -56,7 +56,7 @@
     <td align="right">
       <form>
       <label for="channel">Channel</label>
-      <select name="channel" id="channel">
+      <select name="channel" id="channel" onchange="if (this.value) window.location.href=this.value">>
         <@channels>
           <option value="/<$_>/this/<$date>"<?{ $_ eq $channel }> selected</?>><$_></option>
         </@>
