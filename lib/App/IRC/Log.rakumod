@@ -253,7 +253,8 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         {
 
             # Fetch the log and nick coloring
-            my $log   := self.log($channel).log($date);
+            my $clog  := self.log($channel);
+            my $log   := $clog.log($date);
             my %color := &!nicks2color($log.nicks.keys);
 
             # Set up entries for use in template
@@ -303,11 +304,11 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
               :next-month($date.substr(0,7).succ),
               :next-year($date.substr(0,4).succ),
               :prev-date($Date.earlier(:1day)),
-              :prev-month($date.ends-with('-01')
+              :prev-month($clog.is-first-date-of-month($date)
                 ?? $date.substr(0,7).pred
                 !! $date.substr(0,7)
               ),
-              :prev-year($date.ends-with('-01-01')
+              :prev-year($clog.is-first-date-of-year($date)
                 ?? $date.substr(0,4).pred
                 !! $date.substr(0,4)
               ),
