@@ -93,10 +93,26 @@ subset DATE of Str where {
 }
 
 # Hash for humanizing dates
-my constant @months = <?
+my constant @human-months = <?
   January February March April May June July
   August September October November December
 >;
+
+# Turn a YYYY-MM-DD date into a human readable date
+sub human-date(str $date) {
+    $date.substr(8,2).Int
+      ~ ' '
+      ~ @human-months[$date.substr(5,2)]
+      ~ ' '
+      ~ $date.substr(0,4)
+}
+
+# Turn a YYYY-MM-DD date into a human readable month
+sub human-month(str $date) {
+    @human-months[$date.substr(5,2)]
+      ~ ' '
+      ~ $date.substr(0,4)
+}
 
 # Return Map with nicks mapped to HTML snippet with colorized nick
 sub nicks2color(@nicks) {
@@ -299,7 +315,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
               :$channel,
               :@!channels,
               :$date,
-              :date-human("$Date.day() @months[$Date.month] $Date.year()"),
+              :date-human("$Date.day() @human-months[$Date.month] $Date.year()"),
               :next-date($Date.later(:1day)),
               :next-month($date.substr(0,7).succ),
               :next-year($date.substr(0,4).succ),
@@ -367,8 +383,35 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
               || $html.modified < $!liftoff       # file is too old
                                 | $crot.modified  # or template changed
             {
+                my @channels = @!channels.map: -> $channel {
+                    my $log   := self.log($channel);
+                    my @dates  = $log.dates.sort;  # XXX should be sorted
+                    my %months = @dates.categorize: *.substr(0,7);
+                    my @months = %months.sort(*.key).reverse.map: {
+                        Map.new((
+                          month       => .key,
+                          human-month => human-month(.key),
+                          dates       => .value.map( {
+                              Map.new((
+                                channel => $channel,
+                                day     => .substr(8,2).Int,
+                                date    => $_,
+                              ))
+                          }).List
+                        ))
+                    }
+                    Map.new((
+                      name             => $channel,
+                      months           => @months,
+                      first-date       => @dates.head,
+                      first-human-date => human-date(@dates.head),
+                      last-date        => @dates.tail,
+                      last-human-date  => human-date(@dates.tail),
+                    ))
+                }
+
                 render $html, $crot, {
-                  channels => @!channels,
+                  channels => @channels,
                 }
             }
             $html
@@ -409,13 +452,13 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             }
 
             get -> CHANNEL $channel, YEAR $year {
-                my @dates := self.log($channel).dates;
+                my @dates = self.log($channel).dates.sort;  # XXX should be sorted already
                 redirect "/$channel/"
                   ~ (@dates[finds @dates, $year] || @dates.tail)
                   ~ '.html';
             }
             get -> CHANNEL $channel, MONTH $month {
-                my @dates := self.log($channel).dates;
+                my @dates = self.log($channel).dates.sort;  # XXX should be sorted already
                 redirect "/$channel/"
                   ~ (@dates[finds @dates, $month] || @dates.tail)
                   ~ '.html';
