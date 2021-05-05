@@ -172,6 +172,7 @@ sub htmlize($entry, %color) {
     $text
 }
 
+#-------------------------------------------------------------------------------
 class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required is built(:bind);
     has IO()    $.log-dir       is required;
@@ -180,11 +181,19 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     has         &.htmlize      is built(:bind) = &htmlize;
     has         &.nicks2color  is built(:bind) = &nicks2color;
     has Instant $.liftoff      is built(:bind) = $?FILE.words.head.IO.modified;
-    has Lock    $!channel-lock is built(:bind) = Lock.new;
     has         %!channels;
     has         @.channels = $!log-dir.dir.map({
                                  .basename if .d && !.basename.starts-with('.')
                              }).sort;
+
+    method TWEAK() {
+        %!channels{$_} := start {
+            IRC::Channel::Log.new:
+              logdir => $!log-dir.add($_),
+              class  => $!log-class,
+              name   => $_;
+        } for @!channels;
+    }
 
     # Return IO object for given channel and day
     method !day($channel, $file --> IO:D) {
@@ -284,11 +293,13 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
 
     # Return IRC::Channel::Log object for given channel
     method log(str $channel) {
-        $!channel-lock.protect: {
-            %!channels{$channel} //= IRC::Channel::Log.new:
-              logdir => $!log-dir.add($channel),
-              class  => $!log-class,
-              name   => $channel;
+        given %!channels{$channel} {
+            if $_ ~~ Promise {
+                %!channels{$channel} := .result
+            }
+            else {
+                $_
+            }
         }
     }
 
