@@ -348,7 +348,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                 my @dates  = $log.dates.sort;  # XXX should be sorted already
                 my %months = @dates.categorize: *.substr(0,7);
                 my %years  = %months.categorize: *.key.substr(0,4);
-                my @years = %years.sort(*.key).map: {
+                my @years  = %years.sort(*.key).map: {
                     Map.new((
                       channel => $channel,
                       year    => .key,
@@ -373,6 +373,51 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
 
             render $html, $crot, {
               channels => @channels,
+            }
+        }
+        $html
+    }
+
+    # Return an IO object for /channel/index.html
+    method !index(str $channel --> IO:D) {
+        my $html := $!html-dir.add($channel).add('index.html');
+        my $crot := $!templates-dir.add($channel).add('index.crotmp');
+        $crot := $!templates-dir.add('index.crotmp') unless $crot.e;
+
+        if !$html.e                           # file does not exist
+          || $html.modified < $!liftoff       # file is too old
+                            | $crot.modified  # or template changed
+        {
+            my $log   := self.log($channel);
+            my @dates  = $log.dates.sort;  # XXX should be sorted already
+            my %months = @dates.categorize: *.substr(0,7);
+            my %years  = %months.categorize: *.key.substr(0,4);
+            my @years  = %years.sort(*.key).map: {
+                Map.new((
+                  channel => $channel,
+                  year    => .key,
+                  months  => .value.sort(*.key).map: {
+                     Map.new((
+                        month       => .key,
+                        human-month => @human-months[.key.substr(5,2)],
+                        dates       => .value.map( {
+                            Map.new((
+                              day  => .substr(8,2).Int,
+                              date => $_,
+                            ))
+                        }).List
+                     ))
+                  },
+                ))
+            }
+
+            render $html, $crot, {
+              name             => $channel,
+              years            => @years,
+              first-date       => @dates.head,
+              first-human-date => human-date(@dates.head),
+              last-date        => @dates.tail,
+              last-human-date  => human-date(@dates.tail),
             }
         }
         $html
@@ -427,35 +472,8 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
               || $html.modified < $!liftoff       # file is too old
                                 | $crot.modified  # or template changed
             {
-                my @channels = @!channels.map: -> $channel {
-                    my $log   := self.log($channel);
-                    my @dates  = $log.dates.sort;  # XXX should be sorted
-                    my %months = @dates.categorize: *.substr(0,7);
-                    my @months = %months.sort(*.key).reverse.map: {
-                        Map.new((
-                          month       => .key,
-                          human-month => human-month(.key),
-                          dates       => .value.map( {
-                              Map.new((
-                                channel => $channel,
-                                day     => .substr(8,2).Int,
-                                date    => $_,
-                              ))
-                          }).List
-                        ))
-                    }
-                    Map.new((
-                      name             => $channel,
-                      months           => @months,
-                      first-date       => @dates.head,
-                      first-human-date => human-date(@dates.head),
-                      last-date        => @dates.tail,
-                      last-human-date  => human-date(@dates.tail),
-                    ))
-                }
-
                 render $html, $crot, {
-                  channels => @channels,
+                  channels => @!channels,
                 }
             }
             $html
@@ -477,6 +495,10 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             get -> CHANNEL $channel {
                 redirect "/$channel/index.html", :permanent
             }
+            get -> CHANNEL $channel, 'index.html' {
+                serve-static self!index($channel)
+            }
+
             get -> CHANNEL $channel, 'today' {
                 redirect "/$channel/"
                   ~ self.log($channel).this-date(now.Date.Str)

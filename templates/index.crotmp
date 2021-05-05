@@ -1,11 +1,29 @@
 <html>
 <head>
-  <title>Index of the #<.channel> IRC Channel</title>
+  <title>Index of the #<.name> IRC Channel</title>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <link rel="stylesheet" type="text/css" href="style.css" title="Irclog Stylesheet">
+  <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
   <h1>Index of the #<.channel> IRC Channel</h1>
+  <p>
+The following logs are currently available:
+<a href="/<.name>/<.first-date>.html"><.first-human-date></a> -
+<a href="/<.name>/<.last-date>.html"><.last-human-date></a>
+  </p>
+  <p>
+  <@years>
+    <h2><.year></h2>
+    <p>
+    <@months>
+      <.human-month>:
+      <@dates>
+        <a href="<.date>.html"><.day></a>
+      </@>
+    </@>
+    </p>
+  </@>
+  </p>
   <div id="footer">Powered by <a href="https://cro.services">Cro</a> and the <a href="https://raku.org">Raku Programming Language</a></div>
 </body>
 </html>

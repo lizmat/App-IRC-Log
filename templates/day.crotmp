@@ -67,6 +67,7 @@
       <a href="today">Today</a>
       <a href="random">I feel lucky</a>
       <a href="<.date>.log">Raw</a>
+      <a href="index.html">Index</a>
       <a href="/home.html">Home</a>
     </td>
   </tr>
