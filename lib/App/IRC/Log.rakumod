@@ -392,7 +392,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             my @dates  = $log.dates.sort;  # XXX should be sorted already
             my %months = @dates.categorize: *.substr(0,7);
             my %years  = %months.categorize: *.key.substr(0,4);
-            my @years  = %years.sort(*.key).map: {
+            my @years  = %years.sort(*.key).reverse.map: {
                 Map.new((
                   channel => $channel,
                   year    => .key,
