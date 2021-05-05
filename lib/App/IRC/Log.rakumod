@@ -6,6 +6,7 @@ use Cro::WebApp::Template;
 use IRC::Channel::Log;
 use RandomColor;
 
+# Stopgap measure until we can ask Cro
 my constant %mime-types = Map.new((
   ''   => 'text/text',
   css  => 'text/css',
@@ -14,6 +15,7 @@ my constant %mime-types = Map.new((
 ));
 my constant $default-mime-type = %mime-types{''};
 
+# Return MIME type for a given IO
 sub mime-type(IO:D $io) {
     my $basename := $io.basename;
     with $basename.rindex('.') {
@@ -25,6 +27,7 @@ sub mime-type(IO:D $io) {
     }
 }
 
+# Return IO for gzipped version of given IO
 sub gzip(IO:D $io) {
     my $gzip := $io.sibling($io.basename ~ '.gz');
     run('gzip', '--keep', '--force', $io.absolute)
@@ -32,6 +35,7 @@ sub gzip(IO:D $io) {
     $gzip
 }
 
+# Return the clients Accept-Encoding
 sub accept-encoding() {
     with request.headers.first: *.name eq 'Accept-Encoding' {
         .value
@@ -41,17 +45,19 @@ sub accept-encoding() {
     }
 }
 
+# Return whether client accepts gzip
 sub may-serve-gzip() {
     accept-encoding.contains('gzip')
 }
 
-sub render(IO:D $dir, IO:D $html, IO:D $crot, %_) {
-    $dir.mkdir;
-    $html.spurt:
-    render-template $crot, %_;
+# Render HTML given IO and template and make sure there is a
+# gzipped version for it as well
+sub render(IO:D $html, IO:D $crot, %_ --> Nil) {
+    $html.spurt: render-template $crot, %_;
     gzip($html);
 }
 
+# Serve the given IO as a static file
 multi sub serve-static(IO:D $io is copy, *%_) {
 dd $io.absolute;
 #    if may-serve-gzip() {
@@ -66,12 +72,27 @@ dd $io.absolute;
 }
 multi sub serve-static($, *%) { not-found }
 
+# Subsets for routing
 subset HTML of Str  where *.ends-with('.html');
-subset DAY  of HTML where { try .IO.basename.substr(0,10).Date }
-subset DATE of Str  where { try .Date }
 subset CSS  of Str  where *.ends-with('.css');
 subset LOG  of Str  where *.ends-with('.log');
 
+subset DAY of HTML where {
+    try .IO.basename.substr(0,10).Date
+}
+subset YEAR of Str where {
+    try .chars == 4 && .Int
+}
+subset MONTH of Str where {
+    try .chars == 7
+      && .substr(0,4).Int             # year ok
+      && 0 <= .substr(5,2).Int <= 13  # month ok, allow for offset of 1
+}
+subset DATE of Str where {
+    try .Date
+}
+
+# Hash for humanizing dates
 my constant @months = <?
   January February March April May June July
   August September October November December
@@ -112,9 +133,10 @@ sub nicks2color(@nicks) {
     }))
 }
 
-# delimiters in message to find nicks
+# Delimiters in message to find nicks to highlight
 my constant @delimiters = ' ', '<', '>', |< : ; , + >;
 
+# Create HTML version of a given entry
 sub htmlize($entry, %color) {
     my $text = $entry.message;
 
@@ -173,6 +195,8 @@ sub htmlize($entry, %color) {
 }
 
 #-------------------------------------------------------------------------------
+# App::IRC::Log class
+#
 class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required is built(:bind);
     has IO()    $.log-dir       is required;
@@ -186,6 +210,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                                  .basename if .d && !.basename.starts-with('.')
                              }).sort;
 
+    # Start loading the logs asynchronously
     method TWEAK() {
         %!channels{$_} := start {
             IRC::Channel::Log.new:
@@ -193,6 +218,24 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
               class  => $!log-class,
               name   => $_;
         } for @!channels;
+    }
+
+    # Return IRC::Channel::Log object for given channel
+    method log(str $channel) {
+
+        # Even though this could be called from several threads
+        # simultaneously, the key should always exist, so there
+        # is no danger of messing up the hash.  The only thing
+        # that can happen, is binding the result of the Promise
+        # more than once to the hash.
+        given %!channels{$channel} {
+            if $_ ~~ Promise {
+                %!channels{$channel} := .result  # not ready yet
+            }
+            else {
+                $_                               # ready, so go!
+            }
+        }
     }
 
     # Return IO object for given channel and day
@@ -250,21 +293,34 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             @entries = @entries.grep(*.defined);
 
             # Render it!
-            render $dir, $html, $crot, {
+            $dir.mkdir;
+            render $html, $crot, {
               :$channel,
               :@!channels,
               :$date,
               :date-human("$Date.day() @months[$Date.month] $Date.year()"),
               :next-date($Date.later(:1day)),
+              :next-month($date.substr(0,7).succ),
+              :next-year($date.substr(0,4).succ),
               :prev-date($Date.earlier(:1day)),
+              :prev-month($date.ends-with('-01')
+                ?? $date.substr(0,7).pred
+                !! $date.substr(0,7)
+              ),
+              :prev-year($date.ends-with('-01-01')
+                ?? $date.substr(0,4).pred
+                !! $date.substr(0,4)
+              ),
               :@entries
             }
         }
         $html
     }
 
-    # Return an IO object for other HTML files
-    method !html($channel, $file --> IO:D) {
+    proto method html(|) is implementation-detail {*}
+
+    # Return an IO object for other HTML files in a channel
+    multi method html($channel, $file --> IO:D) {
         my $template := $file.chop(5) ~ '.crotmp';
 
         my $dir  := $!html-dir.add($channel);
@@ -283,7 +339,8 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
               || $html.modified < $!liftoff       # file is too old
                                 | $crot.modified  # or template changed
             {
-                render $dir, $html, $crot, {
+                $dir.mkdir;
+                render $html, $crot, {
                   :$channel,
                 }
             }
@@ -291,15 +348,29 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         }
     }
 
-    # Return IRC::Channel::Log object for given channel
-    method log(str $channel) {
-        given %!channels{$channel} {
-            if $_ ~~ Promise {
-                %!channels{$channel} := .result
+    # Return an IO object for other HTML files in root dir
+    multi method html($file --> IO:D) {
+        my $template := $file.chop(5) ~ '.crotmp';
+
+        my $html := $!html-dir.add($file);
+        my $crot := $!templates-dir.add($template);
+
+        # No template, if there's bare HTML, serve it
+        if !$crot.e {
+            $html.e ?? $html !! Nil
+        }
+
+        # May need to render
+        else {
+            if !$html.e                           # file does not exist
+              || $html.modified < $!liftoff       # file is too old
+                                | $crot.modified  # or template changed
+            {
+                render $html, $crot, {
+                  channels => @!channels,
+                }
             }
-            else {
-                $_
-            }
+            $html
         }
     }
 
@@ -308,11 +379,47 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         subset CHANNEL of Str where { $_ (elem) @!channels }
 
         route {
+            get -> {
+                redirect "/home.html", :permanent
+            }
+
+            get -> CHANNEL $channel {
+                redirect "/$channel/index.html", :permanent
+            }
             get -> CHANNEL $channel, 'today' {
                 redirect "/$channel/"
                   ~ self.log($channel).this-date(now.Date.Str)
                   ~ '.html';
             }
+            get -> CHANNEL $channel, 'first' {
+                redirect "/$channel/"
+                  ~ self.log($channel).dates.head
+                  ~ '.html';
+            }
+            get -> CHANNEL $channel, 'last' {
+                redirect "/$channel/"
+                  ~ self.log($channel).dates.tail
+                  ~ '.html';
+            }
+            get -> CHANNEL $channel, 'random' {
+                redirect "/$channel/"
+                  ~ self.log($channel).dates.roll
+                  ~ '.html';
+            }
+
+            get -> CHANNEL $channel, YEAR $year {
+                my @dates := self.log($channel).dates;
+                redirect "/$channel/"
+                  ~ (@dates[finds @dates, $year] || @dates.tail)
+                  ~ '.html';
+            }
+            get -> CHANNEL $channel, MONTH $month {
+                my @dates := self.log($channel).dates;
+                redirect "/$channel/"
+                  ~ (@dates[finds @dates, $month] || @dates.tail)
+                  ~ '.html';
+            }
+
             get -> CHANNEL $channel, 'prev', DATE $date {
                 with self.log($channel).prev-date($date) -> $prev {
                     redirect "/$channel/$prev.html", :permanent
@@ -338,11 +445,8 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             get -> CHANNEL $channel, DAY $file {
                 serve-static self!day($channel, $file);
             }
-            get -> CHANNEL $channel, DAY $file {
-                serve-static self!day($channel, $file);
-            }
             get -> CHANNEL $channel, HTML $file {
-                serve-static self!html($channel, $file);
+                serve-static self.html($channel, $file);
             }
             get -> CHANNEL $channel, CSS $file {
                 my $io := $!html-dir.add($channel).add($file);
@@ -356,6 +460,10 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
 
                 serve-static $io, :%mime-types
             }
+            get -> HTML $file {
+                serve-static self.html($file)
+            }
+
             get -> $file {
                 serve-static $!html-dir.add($file)
             }

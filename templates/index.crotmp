@@ -6,5 +6,6 @@
 </head>
 <body>
   <h1>Index of the #<.channel> IRC Channel</h1>
+  <div id="footer">Powered by <a href="https://cro.services">Cro</a> and the <a href="https://raku.org">Raku Programming Language</a></div>
 </body>
 </html>

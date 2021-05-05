@@ -34,11 +34,21 @@
 <table width="100%">
   <tr>
     <td align="center"> 
-      <a href="prev/<.date>"><span style="font-weight: bold">&larr;</span></a>
+      <a href="first"><span style="font-weight: bold">|&lt;</span></a>
       &nbsp;
-      <a href="today"><span style="font-weight: bold">Today</span></a>
+      <a href="<.prev-year>"><span style="font-weight: bold">&lt;&lt;&lt;</span></a>
       &nbsp;
-      <a href="next/<.date>"><span style="font-weight: bold">&rarr;</span></a>
+      <a href="<.prev-month>"><span style="font-weight: bold">&lt;&lt;</span></a>
+      &nbsp;
+      <a href="prev/<.date>"><span style="font-weight: bold">&lt;</span></a>
+      &nbsp;
+      <a href="next/<.date>"><span style="font-weight: bold">&gt;</span></a>
+      &nbsp;
+      <a href="<.next-month>"><span style="font-weight: bold">&gt;&gt;</span></a>
+      &nbsp;
+      <a href="<.next-year>"><span style="font-weight: bold">&gt;&gt;&gt;</span></a>
+      &nbsp;
+      <a href="last"><span style="font-weight: bold">&gt;|</span></a>
     </td>
     <td>
       Search <input></input>
@@ -54,6 +64,8 @@
       </form>
     </td>
     <td align="right">
+      <a href="today">Today</a>
+      <a href="random">I feel lucky</a>
       <a href="<.date>.log">Raw</a>
       <a href="help.html">Help</a>
     </td>
