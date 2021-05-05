@@ -334,6 +334,50 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         $html
     }
 
+    # Return an IO object for /home.html
+    method !home(--> IO:D) {
+        my $html := $!html-dir.add('home.html');
+        my $crot := $!templates-dir.add('home.crotmp');
+
+        if !$html.e                           # file does not exist
+          || $html.modified < $!liftoff       # file is too old
+                            | $crot.modified  # or template changed
+        {
+            my @channels = @!channels.map: -> $channel {
+                my $log   := self.log($channel);
+                my @dates  = $log.dates.sort;  # XXX should be sorted already
+                my %months = @dates.categorize: *.substr(0,7);
+                my %years  = %months.categorize: *.key.substr(0,4);
+                my @years = %years.sort(*.key).map: {
+                    Map.new((
+                      channel => $channel,
+                      year    => .key,
+                      months  => .value.sort(*.key).map: {
+                         Map.new((
+                            channel     => $channel,
+                            month       => .key,
+                            human-month => @human-months[.key.substr(5,2)],
+                         ))
+                      },
+                    ))
+                }
+                Map.new((
+                  name             => $channel,
+                  years            => @years,
+                  first-date       => @dates.head,
+                  first-human-date => human-date(@dates.head),
+                  last-date        => @dates.tail,
+                  last-human-date  => human-date(@dates.tail),
+                ))
+            }
+
+            render $html, $crot, {
+              channels => @channels,
+            }
+        }
+        $html
+    }
+
     proto method html(|) is implementation-detail {*}
 
     # Return an IO object for other HTML files in a channel
@@ -425,6 +469,9 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         route {
             get -> {
                 redirect "/home.html", :permanent
+            }
+            get -> 'home.html' {
+                serve-static self!home
             }
 
             get -> CHANNEL $channel {
