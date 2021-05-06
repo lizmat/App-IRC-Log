@@ -233,7 +233,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             IRC::Channel::Log.new:
               logdir => $!log-dir.add($_),
               class  => $!log-class,
-              name   => $_;
+              name   => $_
         } for @!channels;
     }
 
@@ -401,10 +401,13 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                      Map.new((
                         month       => .key,
                         human-month => @human-months[.key.substr(5,2)],
-                        dates       => .value.map( {
+                        dates       => .value.map( -> $date {
+                            my $date-log := $log.log($date);
                             Map.new((
-                              day  => .substr(8,2).Int,
-                              date => $_,
+                              control      => $date-log.nr-control-entries,
+                              conversation => $date-log.nr-conversation-entries,
+                              day          => $date.substr(8,2).Int,
+                              date         => $date,
                             ))
                         }).List
                      ))

@@ -15,7 +15,8 @@
     <@months>
       <span style="font-weight: bold"><.human-month>:</span>
       <@dates>
-        <a href="<.date>.html"><.day></a>
+        <?.conversation><a href="<.date>.html"><.day></a></?>
+        <!.conversation><.day></!>
       </@>
     </@>
     </p>
