@@ -5,6 +5,7 @@ use Cro::HTTP::Router;
 use Cro::WebApp::Template;
 use IRC::Channel::Log;
 use RandomColor;
+use String::Color;
 
 # Stopgap measure until we can ask Cro
 my constant %mime-types = Map.new((
@@ -116,37 +117,16 @@ sub human-month(str $date) {
 
 # Return Map with nicks mapped to HTML snippet with colorized nick
 sub nicks2color(@nicks) {
-    my str @seen  = '';
-    my str @color = '';
+    my $sc := String::Color.new:
+      generator => { RandomColor.new(:luminosity<bright>).list.head }
 
-    # Set up nicks with associated colors, using the same color for
-    # nicks that are probably aliases (because they share the same
-    # root)
-    for @nicks.sort(-*.chars) -> $nick {
-        my $pos   := finds @seen, $nick;
-        my $found := @seen[$pos];
+    $sc.add:
+      @nicks.sort(-*.chars),
+      matcher => -> $nick, $found { $found && $found.starts-with($nick) }
 
-        inserts
-          @seen,  $nick,
-          @color, $found && $found.starts-with($nick)
-            ?? @color[$pos]
-            !! RandomColor.new(:luminosity<bright>).list.head;
-     }
-
-     # Turn the mapping into nick -> HTML mapping
-     Map.new(( (^@seen).map: -> int $pos {
-        if @color[$pos] -> $color {
-            $_ => '<span style="color: '
-                    ~ $color
-                    ~ '">'
-                    ~ $_
-                    ~ '</span>'
-            given @seen[$pos]
-        }
-        else {
-            '' => ''
-        }
-    }))
+    $sc.Map: -> $nick, $color { 
+        '<span style="color: ' ~ $color ~ '">' ~ $nick ~ '</span>'
+    }
 }
 
 # Delimiters in message to find nicks to highlight
@@ -228,7 +208,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                              }).sort;
 
     # Start loading the logs asynchronously
-    method TWEAK() {
+    method TWEAK(--> Nil) {
         %!channels{$_} := start {
             IRC::Channel::Log.new:
               logdir => $!log-dir.add($_),
@@ -238,7 +218,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     }
 
     # Return IRC::Channel::Log object for given channel
-    method log(str $channel) {
+    method log(str $channel --> IRC::Channel::Log:D) {
 
         # Even though this could be called from several threads
         # simultaneously, the key should always exist, so there

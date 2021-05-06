@@ -51,7 +51,7 @@
       <a href="last"><span style="font-weight: bold">&gt;|</span></a>
     </td>
     <td>
-      Search <input></input>
+      Search <form action="search.html"><input name="query"/></form>
     </td>
     <td align="right">
       <form>

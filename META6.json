@@ -10,7 +10,8 @@
     "Cro::HTTP::Router",
     "Cro::WebApp::Template",
     "IRC::Channel::Log",
-    "RandomColor"
+    "RandomColor",
+    "String::Color"
   ],
   "description": "Cro application for presentating IRC logs",
   "license": "Artistic-2.0",
