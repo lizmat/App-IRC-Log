@@ -414,6 +414,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
 
             render $html, $crot, {
               name             => $channel,
+              channels         => @!channels,
               years            => @years,
               first-date       => @dates.head,
               first-human-date => human-date(@dates.head),
