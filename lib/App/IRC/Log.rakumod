@@ -173,7 +173,8 @@ sub htmlize($entry, %color) {
             # URL linking
             $text .= subst(
               / https? '://' \S+ /,
-              { '<a href="' ~ $/~ '">' ~ $/ ~ '</a>' }
+              { '<a href="' ~ $/~ '">' ~ $/ ~ '</a>' },
+              :global
             );
 
             # Nick highlighting
