@@ -20,11 +20,7 @@ The following logs are currently available (in alphabetical order):
   </p>
   <@channels>
     </hr>
-    <h2>#<.name></h2>
-    <p>
-      <a href="/<.name>/<.first-date>.html"><.first-human-date></a> -
-      <a href="/<.name>/<.last-date>.html"><.last-human-date></a>
-    </p>
+    <h2>#<.name> <.first-human-date> - <.last-human-date></h2>
     <p>
     <@years>
       <span style="font-weight: bold"><.year>:</span>
