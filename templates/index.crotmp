@@ -5,7 +5,7 @@
   <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
-  <h1>Index of the #<.channel> IRC Channel</h1>
+  <h1>Index of the #<.name> IRC Channel</h1>
   <p>
 The following logs are currently available:
 <a href="/<.name>/<.first-date>.html"><.first-human-date></a> -
