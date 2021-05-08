@@ -119,18 +119,22 @@ my constant @delimiters = ' ', '<', '>', |< : ; , + >;
 # Nicks that shouldn't be highlighted in text, because they probably
 # are *not* related to that nick.
 my constant %stop-nicks = <
-  agree all alpha also and any args around audience beta
-  block browser change channels complex constant could cpan
-  curious decent dev did direction echo embed everything fine
-  for fun function get good hawaiian help hey his hmm hmmm
-  hope its just kill last life like literal little log match
-  name need never new nothing one oops perl perl5 perl6 pizza
+  afraid agree all alpha also and any args around audience
+  banned beep beta block browser cap change channels complex
+  concerned confused connection constant could cpan curious
+  decent dead dev did direction echo embed everything failure
+  fine finger food for fork fun function get good hawaiian
+  hello help hey hide his hmm hmmm hope host interested its
+  just keyboard kill last life like literal little log mac
+  match moar name need never new nothing one oops parrot
+  partisan partly patch perl perl5 perl6 pizza promote
   programming properly python question raku rakudo really
-  regex register release repl return simple should some
-  somebody someone soon sorry spam spine spot subroutine
-  success such system test tests the there they think this
-  trigger try type undefined unix user variables visiting was
-  what when yes
+  regex register release repl return rid root signal simple
+  should some somebody someone soon sorry spam spine spot
+  stop subroutine success such system systems tea test
+  tester testing tests the there they think this total
+  trigger try twigil type undefined unix user usr variables
+  visiting was what when who will writer yes
 >.map: { $_ => True }
 
 # Create HTML version of a given entry
