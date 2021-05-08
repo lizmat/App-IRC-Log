@@ -1,6 +1,7 @@
 .precomp/
-/lib/IRC/Channel/Log.rakumod
 /App-IRC-Log-*
 /releases/
-/html/*/*
+/html/*
+/state/
+*.gz
 /logs

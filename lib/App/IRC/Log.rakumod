@@ -4,8 +4,6 @@ use Array::Sorted::Util;
 use Cro::HTTP::Router;
 use Cro::WebApp::Template;
 use IRC::Channel::Log;
-use RandomColor;
-use String::Color;
 
 # Stopgap measure until we can ask Cro
 my constant %mime-types = Map.new((
@@ -115,25 +113,28 @@ sub human-month(str $date) {
       ~ $date.substr(0,4)
 }
 
-# Return Map with nicks mapped to HTML snippet with colorized nick
-sub nicks2color(@nicks) {
-    my $sc := String::Color.new:
-      generator => { RandomColor.new(:luminosity<bright>).list.head }
-
-    $sc.add:
-      @nicks.sort(-*.chars),
-      matcher => -> $nick, $found { $found && $found.starts-with($nick) }
-
-    $sc.Map: -> $nick, $color { 
-        '<span style="color: ' ~ $color ~ '">' ~ $nick ~ '</span>'
-    }
-}
-
 # Delimiters in message to find nicks to highlight
 my constant @delimiters = ' ', '<', '>', |< : ; , + >;
 
+# Nicks that shouldn't be highlighted in text, because they probably
+# are *not* related to that nick.
+my constant %stop-nicks = <
+  agree all alpha also and any args around audience beta
+  block browser change channels complex constant could cpan
+  curious decent dev did direction echo embed everything fine
+  for fun function get good hawaiian help hey his hmm hmmm
+  hope its just kill last life like literal little log match
+  name need never new nothing one oops perl perl5 perl6 pizza
+  programming properly python question raku rakudo really
+  regex register release repl return simple should some
+  somebody someone soon sorry spam spine spot subroutine
+  success such system test tests the there they think this
+  trigger try type undefined unix user variables visiting was
+  what when yes
+>.map: { $_ => True }
+
 # Create HTML version of a given entry
-sub htmlize($entry, %color) {
+sub htmlize($entry, %nick-mapped) {
     my $text = $entry.message;
 
     # Something with a text
@@ -159,13 +160,18 @@ sub htmlize($entry, %color) {
 
             # Nick highlighting
             if $entry.^name.ends-with("Topic") {
-                $text .= subst(/ ^ \S+ /, { %color{$/} // $/ });
+                $text .= subst(/ ^ \S+ /, { %nick-mapped{$/} // $/ });
             }
             else {
+                my str $last-del = ' ';
                 $text = $text.split(@delimiters, :v).map(-> $word, $del = '' {
-                    $word
-                      ?? (%color{$word} // $word) ~ $del
-                      !! $del
+                    my $mapped := $word.chars < 3
+                      || %stop-nicks{$word.lc}
+                      || $last-del ne ' '
+                      ?? $word ~ $del
+                      !! (%nick-mapped{$word} // $word) ~ $del;
+                    $last-del = $del;
+                    $mapped
                 }).join;
             }
 
@@ -179,13 +185,13 @@ sub htmlize($entry, %color) {
 
     # No text, just do the nick highlighting
     else {
-        $text .= subst(/^ \S+ /, { %color{$/} // $/ });
+        $text .= subst(/^ \S+ /, { %nick-mapped{$/} // $/ });
 
         if $entry.^name.ends-with("Nick-Change") {
-            $text .= subst(/ \S+ $/, { %color{$/} // $/ });
+            $text .= subst(/ \S+ $/, { %nick-mapped{$/} // $/ });
         }
         elsif $entry.^name.ends-with("Kick") {
-            $text .= subst(/ \S+ $/, { %color{$/} // $/ }, :5th)
+            $text .= subst(/ \S+ $/, { %nick-mapped{$/} // $/ }, :5th)
         }
     }
     $text
@@ -199,26 +205,36 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     has IO()    $.log-dir       is required;
     has IO()    $.html-dir      is required;
     has IO()    $.templates-dir is required;
-    has         &.htmlize      is built(:bind) = &htmlize;
-    has         &.nicks2color  is built(:bind) = &nicks2color;
-    has Instant $.liftoff      is built(:bind) = $?FILE.words.head.IO.modified;
-    has         %!channels;
-    has         @.channels = $!log-dir.dir.map({
+    has IO()    $.state-dir     is required;
+    has         &.htmlize     is built(:bind) = &htmlize;
+    has Instant $.liftoff     is built(:bind) = $?FILE.words.head.IO.modified;
+    has str     @.channels = $!log-dir.dir.map({
                                  .basename if .d && !.basename.starts-with('.')
                              }).sort;
+    has         %!channels;
 
-    # Start loading the logs asynchronously
+    my constant $nick-colors-json = 'nicks.json';
+
+    # Start loading the logs asynchronously.  No need to be thread-safe
+    # here as here will only be the thread creating the object.
     method TWEAK(--> Nil) {
         %!channels{$_} := start {
             IRC::Channel::Log.new:
               logdir => $!log-dir.add($_),
               class  => $!log-class,
+              state  => $!state-dir.add($_),
               name   => $_
         } for @!channels;
     }
 
+    # Perform all actions associated with shutting down.
+    # Expected to be run *after* the application has stopped.
+    method shutdown(App::IRC::Log:D: --> Nil) {
+        self.log($_).shutdown for @!channels;
+    }
+
     # Return IRC::Channel::Log object for given channel
-    method log(str $channel --> IRC::Channel::Log:D) {
+    method log(App::IRC::Log:D: str $channel --> IRC::Channel::Log:D) {
 
         # Even though this could be called from several threads
         # simultaneously, the key should always exist, so there
@@ -250,9 +266,9 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         {
 
             # Fetch the log and nick coloring
-            my $clog  := self.log($channel);
-            my $log   := $clog.log($date);
-            my %color := &!nicks2color($log.nicks.keys);
+            my $clog        := self.log($channel);
+            my $log         := $clog.log($date);
+            my %nick-mapped := $clog.nick-mapped;
 
             # Set up entries for use in template
             my @entries = $log.entries.map: {
@@ -261,11 +277,11 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                   conversation => .conversation,
                   hh-mm        => .hh-mm,
                   hour         => .hour,
-                  message      =>  &!htmlize($_, %color),
+                  message      =>  &!htmlize($_, %nick-mapped),
                   minute       => .minute,
                   ordinal      => .ordinal,
                   target       => .target.substr(11),  # no need for Date
-                  sender       =>  %color{.sender},
+                  sender       =>  %nick-mapped{.sender},
                 ))
             }
 
