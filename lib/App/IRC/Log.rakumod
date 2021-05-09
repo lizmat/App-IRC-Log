@@ -4,6 +4,7 @@ use Array::Sorted::Util;
 use Cro::HTTP::Router;
 use Cro::WebApp::Template;
 use IRC::Channel::Log;
+use RandomColor;
 
 # Stopgap measure until we can ask Cro
 my constant %mime-types = Map.new((
@@ -119,26 +120,44 @@ my constant @delimiters = ' ', '<', '>', |< : ; , + >;
 # Nicks that shouldn't be highlighted in text, because they probably
 # are *not* related to that nick.
 my constant %stop-nicks = <
-  afraid agree all alpha also and any args around audience
-  banned beep beta block browser cap change channels complex
-  concerned confused connection constant could cpan curious
-  decent dead dev did direction echo embed everything failure
-  fine finger food for fork fun function get good hawaiian
-  hello help hey hide his hmm hmmm hope host interested its
-  just keyboard kill last life like literal little log mac
-  match moar name need never new nothing one oops parrot
-  partisan partly patch perl perl5 perl6 pizza promote
-  programming properly python question raku rakudo really
-  regex register release repl return rid root signal simple
-  should some somebody someone soon sorry spam spine spot
-  stop subroutine success such system systems tea test
-  tester testing tests the there they think this total
-  trigger try twigil type undefined unix user usr variables
-  visiting was what when who will writer yes
+  afraid agree alias all alpha alright also and anonymous any
+  args around audience average banned bash beep beta block
+  browser camelia cap change channels complex computer concerned
+  confused connection con constant could cpan curiosity curious
+  dead decent delimited dev did direction echo else embed engine
+  everything failure fine finger food for fork fun function fwiw
+  get good google grew hawaiian hello help hey hide his hmm hmmm
+  hope host info interested its java jit juicy just keyboard
+  kill lambda last life like literal little log looking lost mac
+  man match max mental mhm mind moar moose name need never new
+  niecza nothing one oops panda parrot partisan partly patch
+  perl perl5 perl6 pizza promote programming properly pun python
+  question raku rakudo rakudobug really regex register release
+  repl return rid robot root sad signal simple should some
+  somebody someone soon sorry space spam spine spot stop
+  subroutine success such synthetic system systems tag tea test
+  tester testing tests the there they think this total trick
+  trigger try twigil type undefined unix user usr variable
+  variables visiting wake was what when who will writer yes
 >.map: { $_ => True }
 
+# Default color generator
+sub generator($) {
+    RandomColor.new(:luminosity<bright>).list.head
+}
+
+# Create HTML to colorize a word as a nick
+sub colorize-nick(Str() $nick, %colors) {
+    if %colors{$nick} -> $color {
+        '<span style="color: ' ~ $color ~ '">' ~ $nick ~ '</span>'
+    }
+    else {
+        $nick
+    }
+}
+
 # Create HTML version of a given entry
-sub htmlize($entry, %nick-mapped) {
+sub htmlize($entry, %colors) {
     my $text = $entry.message;
 
     # Something with a text
@@ -164,7 +183,7 @@ sub htmlize($entry, %nick-mapped) {
 
             # Nick highlighting
             if $entry.^name.ends-with("Topic") {
-                $text .= subst(/ ^ \S+ /, { %nick-mapped{$/} // $/ });
+                $text .= subst(/ ^ \S+ /, { colorize-nick($/, %colors) });
             }
             else {
                 my str $last-del = ' ';
@@ -173,7 +192,7 @@ sub htmlize($entry, %nick-mapped) {
                       || %stop-nicks{$word.lc}
                       || $last-del ne ' '
                       ?? $word ~ $del
-                      !! (%nick-mapped{$word} // $word) ~ $del;
+                      !! colorize-nick($word, %colors) ~ $del;
                     $last-del = $del;
                     $mapped
                 }).join;
@@ -189,13 +208,13 @@ sub htmlize($entry, %nick-mapped) {
 
     # No text, just do the nick highlighting
     else {
-        $text .= subst(/^ \S+ /, { %nick-mapped{$/} // $/ });
+        $text .= subst(/^ \S+ /, { colorize-nick($/, %colors) });
 
         if $entry.^name.ends-with("Nick-Change") {
-            $text .= subst(/ \S+ $/, { %nick-mapped{$/} // $/ });
+            $text .= subst(/ \S+ $/, { colorize-nick($/, %colors) });
         }
         elsif $entry.^name.ends-with("Kick") {
-            $text .= subst(/ \S+ $/, { %nick-mapped{$/} // $/ }, :5th)
+            $text .= subst(/ \S+ $/, { colorize-nick($/, %colors) }, :5th)
         }
     }
     $text
@@ -223,11 +242,14 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     # here as here will only be the thread creating the object.
     method TWEAK(--> Nil) {
         %!channels{$_} := start {
-            IRC::Channel::Log.new:
-              logdir => $!log-dir.add($_),
-              class  => $!log-class,
-              state  => $!state-dir.add($_),
-              name   => $_
+            my $clog := IRC::Channel::Log.new:
+              logdir    => $!log-dir.add($_),
+              class     => $!log-class,
+              generator => &generator,
+              state     => $!state-dir.add($_),
+              name      => $_;
+            $clog.watch-and-update if $clog.active;
+            $clog;
         } for @!channels;
     }
 
@@ -270,9 +292,9 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         {
 
             # Fetch the log and nick coloring
-            my $clog        := self.log($channel);
-            my $log         := $clog.log($date);
-            my %nick-mapped := $clog.nick-mapped;
+            my $clog   := self.log($channel);
+            my $log    := $clog.log($date);
+            my %colors := $clog.colors;
 
             # Set up entries for use in template
             my @entries = $log.entries.map: {
@@ -281,11 +303,11 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                   conversation => .conversation,
                   hh-mm        => .hh-mm,
                   hour         => .hour,
-                  message      =>  &!htmlize($_, %nick-mapped),
+                  message      =>  &!htmlize($_, %colors),
                   minute       => .minute,
                   ordinal      => .ordinal,
                   target       => .target.substr(11),  # no need for Date
-                  sender       =>  %nick-mapped{.sender},
+                  sender       =>  colorize-nick(.sender, %colors),
                 ))
             }
 
