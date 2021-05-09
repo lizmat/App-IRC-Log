@@ -125,23 +125,24 @@ sub human-month(str $date) {
 my constant %stop-nicks = <
   afraid agree alias all alpha alright also and anonymous any
   args around audience average banned bash beep beta block
-  browser camelia cap change channels complex computer concerned
-  confused connection con constant could cpan curiosity curious
-  dead decent delimited dev did direction echo else embed engine
-  everything failure fine finger food for fork fun function fwiw
-  get good google grew hawaiian hello help hey hide his hmm hmmm
-  hope host info interested its java jit juicy just keyboard
-  kill lambda last life like literal little log looking lost mac
-  man match max mental mhm mind moar moose name need never new
-  niecza nothing one oops panda parrot partisan partly patch
-  perl perl5 perl6 pizza promote programming properly pun python
-  question raku rakudo rakudobug really regex register release
-  repl return rid robot root sad signal simple should some
-  somebody someone soon sorry space spam spine spot stop
-  subroutine success such synthetic system systems tag tea test
-  tester testing tests the there they think this total trick
-  trigger try twigil type undefined unix user usr variable
-  variables visiting wake was what when who will writer yes
+  browser byte camelia cap change channels complex computer
+  concerned confused connection con constant could cpan
+  curiosity curious dead decent delimited dev did direction echo
+  else embed engine everything failure fine finger food for fork
+  fun function fwiw get good google grew hawaiian hello help hey
+  hide his hmm hmmm hope host huh info interested its java jit
+  juicy just keyboard kill lambda last life like literal little
+  log looking lost mac man manner match max mental mhm mind moar
+  moose name need never new niecza nothing one oops panda parrot
+  partisan partly patch perl perl5 perl6 pizza promote
+  programming properly pun python question raku rakudo rakudobug
+  really regex register release repl return rid robot root sad
+  sat signal simple should some somebody someone soon sorry
+  space spam spawn spine spot stop subroutine success such
+  synthetic system systems tag tea test tester testing tests the
+  there they think this total trick trigger try twigil type
+  undefined unix user usr variable variables visiting wake was
+  welcome what when who will writer yes
 >.map: { $_ => True }
 
 # Default color generator
@@ -350,11 +351,11 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
               :next-year($date.substr(0,4).succ),
               :prev-date($Date.earlier(:1day)),
               :prev-month($clog.is-first-date-of-month($date)
-                ?? "prev/$Date.earlier(:1month).first-date-in-month()"
+                ?? "this/$Date.earlier(:1month).first-date-in-month()"
                 !! $date.substr(0,7)
               ),
               :prev-year($clog.is-first-date-of-year($date)
-                ?? 'prev/' ~ Date.new($Date.year - 1, 1, 1)
+                ?? 'this/' ~ Date.new($Date.year - 1, 1, 1)
                 !! $date.substr(0,4)
               ),
               :@entries
