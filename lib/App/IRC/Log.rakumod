@@ -6,6 +6,9 @@ use Cro::WebApp::Template;
 use IRC::Channel::Log;
 use RandomColor;
 
+#-------------------------------------------------------------------------------
+# Stuff related to routing
+
 # Stopgap measure until we can ask Cro
 my constant %mime-types = Map.new((
   ''   => 'text/text',
@@ -92,6 +95,9 @@ subset DATE of Str where {
     try .Date
 }
 
+#-------------------------------------------------------------------------------
+# Stuff for creating values for templates
+
 # Hash for humanizing dates
 my constant @human-months = <?
   January February March April May June July
@@ -113,9 +119,6 @@ sub human-month(str $date) {
       ~ ' '
       ~ $date.substr(0,4)
 }
-
-# Delimiters in message to find nicks to highlight
-my constant @delimiters = ' ', '<', '>', |< : ; , + >;
 
 # Nicks that shouldn't be highlighted in text, because they probably
 # are *not* related to that nick.
@@ -155,6 +158,9 @@ sub colorize-nick(Str() $nick, %colors) {
         $nick
     }
 }
+
+# Delimiters in message to find nicks to highlight
+my constant @delimiters = ' ', '<', '>', |< : ; , + >;
 
 # Create HTML version of a given entry
 sub htmlize($entry, %colors) {
@@ -368,7 +374,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         {
             my @channels = @!channels.map: -> $channel {
                 my $log   := self.log($channel);
-                my @dates  = $log.dates.sort;  # XXX should be sorted already
+                my @dates  = $log.dates;
                 my %months = @dates.categorize: *.substr(0,7);
                 my %years  = %months.categorize: *.key.substr(0,4);
                 my @years  = %years.sort(*.key).map: {
@@ -412,7 +418,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                             | $crot.modified  # or template changed
         {
             my $log   := self.log($channel);
-            my @dates  = $log.dates.sort;  # XXX should be sorted already
+            my @dates  = $log.dates;
             my %months = @dates.categorize: *.substr(0,7);
             my %years  = %months.categorize: *.key.substr(0,4);
             my @years  = %years.sort(*.key).reverse.map: {
@@ -548,13 +554,13 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             }
 
             get -> CHANNEL $channel, YEAR $year {
-                my @dates = self.log($channel).dates.sort;  # XXX should be sorted already
+                my @dates = self.log($channel).dates;
                 redirect "/$channel/"
                   ~ (@dates[finds @dates, $year] || @dates.tail)
                   ~ '.html';
             }
             get -> CHANNEL $channel, MONTH $month {
-                my @dates = self.log($channel).dates.sort;  # XXX should be sorted already
+                my @dates = self.log($channel).dates;
                 redirect "/$channel/"
                   ~ (@dates[finds @dates, $month] || @dates.tail)
                   ~ '.html';
