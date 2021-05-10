@@ -105,10 +105,11 @@ my constant @human-months = <?
 >;
 
 # Turn a YYYY-MM-DD date into a human readable date
-sub human-date(str $date) {
+sub human-date(str $date, :$short) {
+    my $chars := $short ?? 3 !! *;
     $date.substr(8,2).Int
       ~ ' '
-      ~ @human-months[$date.substr(5,2)]
+      ~ @human-months[$date.substr(5,2)].substr(0,$chars)
       ~ ' '
       ~ $date.substr(0,4)
 }
@@ -284,6 +285,31 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         }
     }
 
+    # Set up entries for use in template
+    method !ready-entries-for-template(\entries, %colors, :$short) {
+        my str $last-date = "";
+        entries.map: {
+            my str $date = .date.Str;
+            my $hash := Hash.new((
+              control      => .control,
+              conversation => .conversation,
+              date         => $date,
+              hh-mm        => .hh-mm,
+              hour         => .hour,
+              human-date   => $date eq $last-date
+                                ?? ""
+                                !! human-date($date, :$short),
+              message      =>  &!htmlize($_, %colors),
+              minute       => .minute,
+              ordinal      => .ordinal,
+              sender       =>  colorize-nick(.sender, %colors),
+              target       => .target.substr(11),
+            ));
+            $last-date = $date;
+            $hash
+        }
+    }
+
     # Return IO object for given channel and day
     method !day($channel, $file --> IO:D) {
         my $date := $file.chop(5);
@@ -304,19 +330,8 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             my %colors := $clog.colors;
 
             # Set up entries for use in template
-            my @entries = $log.entries.map: {
-                Hash.new((
-                  control      => .control,
-                  conversation => .conversation,
-                  hh-mm        => .hh-mm,
-                  hour         => .hour,
-                  message      =>  &!htmlize($_, %colors),
-                  minute       => .minute,
-                  ordinal      => .ordinal,
-                  target       => .target.substr(11),  # no need for Date
-                  sender       =>  colorize-nick(.sender, %colors),
-                ))
-            }
+            my @entries =
+              self!ready-entries-for-template($log.entries, %colors);
 
             # Merge control messages inside the same minute
             my $merging;
@@ -457,6 +472,58 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         $html
     }
 
+    # Return HTML for /channel/search.html
+    method !search(
+      str $channel,
+      :$query,
+      :$from-year,
+      :$from-month = 1,
+      :$from-day   = 1,
+      :$to-year,
+      :$to-month   = 12,
+      :$to-day     = 31,
+      :$nick,
+    --> Str:D) {
+        my $crot := $!templates-dir.add($channel).add('search.crotmp');
+        $crot := $!templates-dir.add('search.crotmp') unless $crot.e;
+        my $clog := self.log($channel);
+
+        if $clog.entries(contains => $query).head(41) -> @found {
+            my %colors := $clog.colors;
+            my @entries =
+              self!ready-entries-for-template(@found, %colors, :short);
+            my $more := False;
+            if @entries == 21 {
+                @entries.pop;
+                $more := True;
+            }
+            my $first-date := @entries.head<date>;
+            my $last-date  := @entries.tail<date>;
+
+            render-template $crot, {
+              name             => $channel,
+              channels         => @!channels,
+              entries          => @entries,
+              first-date       => $first-date,
+              first-human-date => human-date($first-date),
+              last-date        => $last-date,
+              last-human-date  => $last-date ?? human-date($last-date) !! "",
+              more             => $more,
+              nr_entries       => +@entries,
+              query            => $query || "",
+            }
+        }
+
+        # nothing found
+        else {
+            render-template $crot, {
+              name     => $channel,
+              channels => @!channels,
+              query    => $query || "",
+            }
+        }
+    }
+
     proto method html(|) is implementation-detail {*}
 
     # Return an IO object for other HTML files in a channel
@@ -532,6 +599,10 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             get -> CHANNEL $channel, 'index.html' {
                 serve-static self!index($channel)
             }
+            get -> CHANNEL $channel, 'search.html', :$query! {
+dd "searching $query";
+                content 'text/html', self!search($channel, :$query, |%_)
+            }
 
             get -> CHANNEL $channel, 'today' {
                 redirect "/$channel/"
@@ -593,6 +664,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                 serve-static self!day($channel, $file);
             }
             get -> CHANNEL $channel, HTML $file {
+dd "static";
                 serve-static self.html($channel, $file);
             }
             get -> CHANNEL $channel, CSS $file {
