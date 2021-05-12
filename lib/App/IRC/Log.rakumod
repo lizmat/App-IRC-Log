@@ -488,7 +488,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         $crot := $!templates-dir.add('search.crotmp') unless $crot.e;
         my $clog := self.log($channel);
 
-        if $clog.entries(contains => $query).head(41) -> @found {
+        if $clog.entries(contains => $query, :reverse).head(41) -> @found {
             my %colors := $clog.colors;
             my @entries =
               self!ready-entries-for-template(@found, %colors, :short);
