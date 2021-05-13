@@ -482,18 +482,32 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
       :$to-year,
       :$to-month   = 12,
       :$to-day     = 31,
-      :$entries-pp = 40;
+      :$entries-pp = 40,
+      :$type       = "words",
+      :$reverse    = True,
+      :$ignorecase = True,
+      :$all        = True,
       :$nick,
     --> Str:D) {
         my $crot := $!templates-dir.add($channel).add('search.crotmp');
         $crot := $!templates-dir.add('search.crotmp') unless $crot.e;
         my $clog := self.log($channel);
 
-        my @words = $query.comb(/ \w+ /).eager;
-
         my %params;
-        %params<reverse> := True;
-        %params<words>   := @words;
+        %params<all>        := True if $all;
+        %params<ignorecase> := True if $ignorecase;
+        %params<reverse>    := True if $reverse;
+        
+        if $type eq "words" && $query.comb(/ \w+ /).eager -> @words {
+            %params<words> := @words;
+#my $then := now;
+#            my str @dates = $clog.dates(:words(@words), :$ignorecase, :$all);
+#say "dates reduced to {+@dates} from {+$clog.dates} in { ((now - $then) * 1000).Int } msecs";
+#            %params<dates> := @dates;
+        }
+        elsif $type eq 'contains' && $query.words -> @words {
+            %params<contains> := @words > 1 ?? @words !! @words[0];
+        }
 
         my $then := now;
         if $clog.entries(|%params).head($entries-pp + 1).eager -> @found {
