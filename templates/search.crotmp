@@ -8,6 +8,7 @@
   <h1 align="center" style="font-weight: bolder">#<.name></h1>
   <&links($_, .name)>
   <hr/>
+  <p><.query> (<.elapsed> msecs)</p>
   <table class="chat" valign="top">
     <tr class="head">
       <th>Date</th>

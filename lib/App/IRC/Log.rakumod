@@ -482,18 +482,27 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
       :$to-year,
       :$to-month   = 12,
       :$to-day     = 31,
+      :$entries-pp = 40;
       :$nick,
     --> Str:D) {
         my $crot := $!templates-dir.add($channel).add('search.crotmp');
         $crot := $!templates-dir.add('search.crotmp') unless $crot.e;
         my $clog := self.log($channel);
 
-        if $clog.entries(:words($query.words), :reverse).head(41) -> @found {
+        my @words = $query.comb(/ \w+ /).eager;
+
+        my %params;
+        %params<reverse> := True;
+        %params<words>   := @words;
+
+        my $then := now;
+        if $clog.entries(|%params).head($entries-pp + 1).eager -> @found {
+            my $elapsed := ((now - $then) * 1000).Int;
             my %colors := $clog.colors;
             my @entries =
               self!ready-entries-for-template(@found, %colors, :short);
             my $more := False;
-            if @entries == 21 {
+            if @entries == $entries-pp + 1 {
                 @entries.pop;
                 $more := True;
             }
@@ -503,6 +512,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             render-template $crot, {
               name             => $channel,
               channels         => @!channels,
+              elapsed          => $elapsed,
               entries          => @entries,
               first-date       => $first-date,
               first-human-date => human-date($first-date),
