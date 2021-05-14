@@ -134,16 +134,16 @@ my constant %stop-nicks = <
   hide his hmm hmmm hope host huh info interested its java jit
   juicy just keyboard kill lambda last life like literal little
   log looking lost mac man manner match max mental mhm mind moar
-  moose name need never new niecza nothing one oops panda parrot
-  partisan partly patch perl perl5 perl6 pizza promote
-  programming properly pun python question raku rakudo rakudobug
-  really regex register release repl return rid robot root sad
-  sat signal simple should some somebody someone soon sorry
-  space spam spawn spine spot stop subroutine success such
-  synthetic system systems tag tea test tester testing tests the
-  there they think this total trick trigger try twigil type
-  undefined unix user usr variable variables visiting wake was
-  welcome what when who will writer yes
+  moose name need never new niecza nobody nothing old one oops
+  panda parrot partisan partly patch perl perl5 perl6 pizza
+  promote programming properly pun python question raku rakudo
+  rakudobug really regex register release repl return rid robot
+  root sad sat signal simple should some somebody someone soon
+  sorry space spam spawn spine spot still stop subroutine
+  success such synthetic system systems tag tea test tester
+  testing tests the there they think this total trick trigger
+  try twigil type undefined unix user usr variable variables
+  visiting wake was welcome what when who will writer yes
 >.map: { $_ => True }
 
 # Default color generator
@@ -494,9 +494,10 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         my $clog := self.log($channel);
 
         my %params;
-        %params<all>        := True if $all;
-        %params<ignorecase> := True if $ignorecase;
-        %params<reverse>    := True if $reverse;
+        %params<all>          := True if $all;
+        %params<ignorecase>   := True if $ignorecase;
+        %params<reverse>      := True if $reverse;
+        %params<conversation> := True;
         
         if $type eq "words" && $query.comb(/ \w+ /).eager -> @words {
             %params<words> := @words;
