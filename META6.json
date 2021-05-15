@@ -6,10 +6,10 @@
   "build-depends": [
   ],
   "depends": [
-    "Array::Sorted::Util",
+    "Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>",
     "Cro::HTTP::Router",
     "Cro::WebApp::Template",
-    "IRC::Channel::Log",
+    "IRC::Channel::Log:ver<0.0.19>:auth<cpan:ELIZABETH>",
     "RandomColor"
   ],
   "description": "Cro application for presentating IRC logs",

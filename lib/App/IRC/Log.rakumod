@@ -1,9 +1,10 @@
 use v6.*;
 
-use Array::Sorted::Util;
-use Cro::HTTP::Router;
-use Cro::WebApp::Template;
-use IRC::Channel::Log;
+use Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>;
+use Cro::HTTP::Router:ver<0.8.5>;
+use Cro::WebApp::Template:ver<0.8.5>;
+use Cro::WebApp::Template::Repository:ver<0.8.5>;
+use IRC::Channel::Log:ver<0.0.19>:auth<cpan:ELIZABETH>;
 use RandomColor;
 
 #-------------------------------------------------------------------------------
@@ -56,6 +57,8 @@ sub may-serve-gzip() {
 # Render HTML given IO and template and make sure there is a
 # gzipped version for it as well
 sub render(IO:D $html, IO:D $crot, %_ --> Nil) {
+    get-template-repository().refresh($crot.absolute)
+      if $html.e && $html.modified < $crot.modified;
     $html.spurt: render-template $crot, %_;
     gzip($html);
 }
@@ -120,6 +123,21 @@ sub human-month(str $date) {
       ~ ' '
       ~ $date.substr(0,4)
 }
+
+# Month pulldown
+my constant @template-months = 
+   1 => "Jan",
+   2 => "Feb",
+   3 => "Mar",
+   4 => "Apr",
+   5 => "May",
+   6 => "Jun",
+   7 => "Jul",
+   8 => "Aug",
+   9 => "Sep",
+  10 => "Oct",
+  11 => "Nov",
+  12 => "Dec";
 
 # Nicks that shouldn't be highlighted in text, because they probably
 # are *not* related to that nick.
@@ -228,6 +246,16 @@ sub htmlize($entry, %colors) {
     $text
 }
 
+# Determine default channels from a given directory
+my sub default-channels(IO:D $log-dir) {
+    $log-dir.dir.map({ 
+      .basename
+      if .d
+      && !.basename.starts-with('.')
+      && .dir(:test(/ ^ \d\d\d\d $ /)).elems
+    }).sort
+}
+
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
 #
@@ -239,16 +267,14 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     has IO()    $.state-dir     is required;
     has         &.htmlize     is built(:bind) = &htmlize;
     has Instant $.liftoff     is built(:bind) = $?FILE.words.head.IO.modified;
-    has str     @.channels = $!log-dir.dir.map({
-                                 .basename if .d && !.basename.starts-with('.')
-                             }).sort;
+    has str     @.channels = default-channels($!log-dir);
     has         %!channels;
 
     my constant $nick-colors-json = 'nicks.json';
 
     # Start loading the logs asynchronously.  No need to be thread-safe
     # here as here will only be the thread creating the object.
-    method TWEAK(--> Nil) {
+    submethod TWEAK(--> Nil) {
         %!channels{$_} := start {
             my $clog := IRC::Channel::Log.new:
               logdir    => $!log-dir.add($_),
@@ -264,11 +290,11 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     # Perform all actions associated with shutting down.
     # Expected to be run *after* the application has stopped.
     method shutdown(App::IRC::Log:D: --> Nil) {
-        self.log($_).shutdown for @!channels;
+        self.clog($_).shutdown for @!channels;
     }
 
     # Return IRC::Channel::Log object for given channel
-    method log(App::IRC::Log:D: str $channel --> IRC::Channel::Log:D) {
+    method clog(App::IRC::Log:D: str $channel --> IRC::Channel::Log:D) {
 
         # Even though this could be called from several threads
         # simultaneously, the key should always exist, so there
@@ -280,17 +306,18 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                 %!channels{$channel} := .result  # not ready yet
             }
             else {
-                $_                               # ready, so go!
+                $_ // Nil                        # ready, so go!
             }
         }
     }
 
     # Set up entries for use in template
-    method !ready-entries-for-template(\entries, %colors, :$short) {
+    method !ready-entries-for-template(\entries, $channel, %colors, :$short) {
         my str $last-date = "";
         entries.map: {
             my str $date = .date.Str;
             my $hash := Hash.new((
+              channel      => $channel,
               control      => .control,
               conversation => .conversation,
               date         => $date,
@@ -325,13 +352,13 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         {
 
             # Fetch the log and nick coloring
-            my $clog   := self.log($channel);
+            my $clog   := self.clog($channel);
             my $log    := $clog.log($date);
             my %colors := $clog.colors;
 
             # Set up entries for use in template
             my @entries =
-              self!ready-entries-for-template($log.entries, %colors);
+              self!ready-entries-for-template($log.entries, $channel, %colors);
 
             # Merge control messages inside the same minute
             my $merging;
@@ -389,8 +416,8 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                             | $crot.modified  # or template changed
         {
             my @channels = @!channels.map: -> $channel {
-                my $log   := self.log($channel);
-                my @dates  = $log.dates;
+                my $clog  := self.clog($channel);
+                my @dates  = $clog.dates;
                 my %months = @dates.categorize: *.substr(0,7);
                 my %years  = %months.categorize: *.key.substr(0,4);
                 my @years  = %years.sort(*.key).map: {
@@ -433,8 +460,8 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
           || $html.modified < $!liftoff       # file is too old
                             | $crot.modified  # or template changed
         {
-            my $log   := self.log($channel);
-            my @dates  = $log.dates;
+            my $clog  := self.clog($channel);
+            my @dates  = $clog.dates;
             my %months = @dates.categorize: *.substr(0,7);
             my %years  = %months.categorize: *.key.substr(0,4);
             my @years  = %years.sort(*.key).reverse.map: {
@@ -446,10 +473,10 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                         month       => .key,
                         human-month => @human-months[.key.substr(5,2)],
                         dates       => .value.map( -> $date {
-                            my $date-log := $log.log($date);
+                            my $log := $clog.log($date);
                             Map.new((
-                              control      => $date-log.nr-control-entries,
-                              conversation => $date-log.nr-conversation-entries,
+                              control      => $log.nr-control-entries,
+                              conversation => $log.nr-conversation-entries,
                               day          => $date.substr(8,2).Int,
                               date         => $date,
                             ))
@@ -472,50 +499,93 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         $html
     }
 
-    # Return HTML for /channel/search.html
+    # Convert a string to a regex that stringifies as the string
+    sub string2regex(Str:D $string) {
+        if $string.contains('{') {   # XXX naive security check
+            Nil
+        }
+        else {
+            my $regex = "/ $string /";
+            $regex.EVAL but $regex   # XXX fix after RakuAST lands
+        }
+    }
+
+    # Return HTML for /search.html
     method !search(
-      str $channel,
       :$query,
+      :$channel!,
+      :$nicks      = "",
       :$from-year,
-      :$from-month = 1,
-      :$from-day   = 1,
+      :$from-month,
+      :$from-day,
       :$to-year,
-      :$to-month   = 12,
-      :$to-day     = 31,
+      :$to-month,
+      :$to-day,
       :$entries-pp = 40,
       :$type       = "words",
-      :$reverse    = True,
-      :$ignorecase = True,
-      :$all        = True,
-      :$nick,
+      :$reverse,
+      :$ignorecase,
+      :$all,
+      :$include-aliases,
     --> Str:D) {
-        my $crot := $!templates-dir.add($channel).add('search.crotmp');
-        $crot := $!templates-dir.add('search.crotmp') unless $crot.e;
-        my $clog := self.log($channel);
+        my $crot := $!templates-dir.add('search.crotmp');
+        if $crot.modified > $!liftoff {
+            get-template-repository().refresh($crot.absolute);
+            say "refreshed $crot";
+        }
+        my $clog := self.clog($channel);
 
         my %params;
         %params<all>          := True if $all;
         %params<ignorecase>   := True if $ignorecase;
         %params<reverse>      := True if $reverse;
         %params<conversation> := True;
+
+        my $from-date;
+        if $from-year && $from-month && $from-day {
+            $from-date = Date.new($from-year, $from-month, $from-day) // Nil;
+        }
+        my $to-date;
+        if $to-year && $to-month && $to-day {
+            $to-date = Date.new($to-year, $to-month, $to-day) // Nil;
+        }
+        if $from-date && $to-date {
+            ($from-date, $to-date) = ($to-date, $from-date)
+              if $to-date < $from-date;
+            %params<dates> := $from-date .. $to-date;
+        }
+
+        my str @errors;
+        if $nicks {
+            if $nicks.comb(/ \w+ /) -> @nicks {
+                if @nicks.map({ $clog.aliases-for-nick($_).Slip }) -> @aliases {
+                    %params<nicks> := $include-aliases ?? @nicks !! @aliases;
+                }
+                else {
+                    @errors.push: "'@nicks' not known as nick(s)";
+                }
+            }
+        }
         
-        if $type eq "words" && $query.comb(/ \w+ /).eager -> @words {
+        if $type eq "words" && $query.comb(/ \w+ /) -> @words {
             %params<words> := @words;
-#my $then := now;
-#            my str @dates = $clog.dates(:words(@words), :$ignorecase, :$all);
-#say "dates reduced to {+@dates} from {+$clog.dates} in { ((now - $then) * 1000).Int } msecs";
-#            %params<dates> := @dates;
         }
         elsif $type eq 'contains' && $query.words -> @words {
-            %params<contains> := @words > 1 ?? @words !! @words[0];
+            %params<contains> := @words;
+        }
+        elsif $type eq 'starts-with' && $query.words -> @words {
+            %params<starts-with> := @words;
+        }
+        elsif $type eq 'matches' {
+            %params<matches> := $_ with string2regex($query);
         }
 
         my $then := now;
-        if $clog.entries(|%params).head($entries-pp + 1).eager -> @found {
-            my $elapsed := ((now - $then) * 1000).Int;
+        if $clog.entries(|%params).head($entries-pp + 1) -> @found {
             my %colors := $clog.colors;
             my @entries =
-              self!ready-entries-for-template(@found, %colors, :short);
+              self!ready-entries-for-template(@found, $channel, %colors, :short);
+            my $elapsed := ((now - $then) * 1000).Int;
             my $more := False;
             if @entries == $entries-pp + 1 {
                 @entries.pop;
@@ -523,19 +593,35 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             }
             my $first-date := @entries.head<date>;
             my $last-date  := @entries.tail<date>;
+            my @years := $clog.years;
 
             render-template $crot, {
-              name             => $channel,
+              all              => $all,
+              days             => 1..31,
               channels         => @!channels,
-              elapsed          => $elapsed,
+              elapsed          => ((now - $then) * 1000).Int,
               entries          => @entries,
               first-date       => $first-date,
               first-human-date => human-date($first-date),
+              from-day         => $from-day,
+              from-month       => $from-month,
+              from-year        => $from-year || @years.head,
+              ignorecase       => $ignorecase,
+              include-aliases  => $include-aliases,
               last-date        => $last-date,
               last-human-date  => $last-date ?? human-date($last-date) !! "",
+              months           => @template-months,
               more             => $more,
+              name             => $channel,
+              nicks            => $nicks,
               nr_entries       => +@entries,
               query            => $query || "",
+              reverse          => $reverse,
+              to-day           => $to-day,
+              to-month         => $to-month,
+              to-year          => $to-year || @years.tail,
+              type             => $type,
+              years            => $clog.years,
             }
         }
 
@@ -617,6 +703,10 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             get -> 'home.html' {
                 serve-static self!home
             }
+            get -> 'search.html', :%args {
+dd %args;
+                content 'text/html', self!search(|%args)
+            }
 
             get -> CHANNEL $channel {
                 redirect "/$channel/index.html", :permanent
@@ -624,47 +714,43 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             get -> CHANNEL $channel, 'index.html' {
                 serve-static self!index($channel)
             }
-            get -> CHANNEL $channel, 'search.html', :$query! {
-dd "searching $query";
-                content 'text/html', self!search($channel, :$query, |%_)
-            }
 
             get -> CHANNEL $channel, 'today' {
                 redirect "/$channel/"
-                  ~ self.log($channel).this-date(now.Date.Str)
+                  ~ self.clog($channel).this-date(now.Date.Str)
                   ~ '.html';
             }
             get -> CHANNEL $channel, 'first' {
                 redirect "/$channel/"
-                  ~ self.log($channel).dates.head
+                  ~ self.clog($channel).dates.head
                   ~ '.html';
             }
             get -> CHANNEL $channel, 'last' {
                 redirect "/$channel/"
-                  ~ self.log($channel).dates.tail
+                  ~ self.clog($channel).dates.tail
                   ~ '.html';
             }
             get -> CHANNEL $channel, 'random' {
                 redirect "/$channel/"
-                  ~ self.log($channel).dates.roll
+                  ~ self.clog($channel).dates.roll
                   ~ '.html';
             }
 
             get -> CHANNEL $channel, YEAR $year {
-                my @dates = self.log($channel).dates;
+                my @dates = self.clog($channel).dates;
                 redirect "/$channel/"
                   ~ (@dates[finds @dates, $year] || @dates.tail)
                   ~ '.html';
             }
             get -> CHANNEL $channel, MONTH $month {
-                my @dates = self.log($channel).dates;
+                my @dates = self.clog($channel).dates;
                 redirect "/$channel/"
                   ~ (@dates[finds @dates, $month] || @dates.tail)
                   ~ '.html';
             }
 
             get -> CHANNEL $channel, 'prev', DATE $date {
-                with self.log($channel).prev-date($date) -> $prev {
+                with self.clog($channel).prev-date($date) -> $prev {
                     redirect "/$channel/$prev.html", :permanent
                 }
                 else {
@@ -673,11 +759,11 @@ dd "searching $query";
             }
             get -> CHANNEL $channel, 'this', DATE $date {
                 redirect "/$channel/"
-                  ~ self.log($channel).this-date($date.Str)
+                  ~ self.clog($channel).this-date($date.Str)
                   ~ '.html';
             }
             get -> CHANNEL $channel, 'next', DATE $date {
-                with self.log($channel).next-date($date) -> $next {
+                with self.clog($channel).next-date($date) -> $next {
                     redirect "/$channel/$next.html", :permanent
                 }
                 else {
