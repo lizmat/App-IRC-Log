@@ -52,7 +52,7 @@
       <a href="last"><span style="font-weight: bold">&gt;|</span></a>
     </td>
     <td>
-      <form action="/search.html">Search&nbsp;<input name="query"/><input type="hidden" name="channel" value="<$channel>"></form>
+      <form action="search.html">Search&nbsp;<input name="query"/></form>
     </td>
     <td align="right">
       <form>

@@ -5,6 +5,7 @@ use Cro::HTTP::Router:ver<0.8.5>;
 use Cro::WebApp::Template:ver<0.8.5>;
 use Cro::WebApp::Template::Repository:ver<0.8.5>;
 use IRC::Channel::Log:ver<0.0.19>:auth<cpan:ELIZABETH>;
+use JSON::Fast:ver<0.15>;
 use RandomColor;
 
 #-------------------------------------------------------------------------------
@@ -16,6 +17,7 @@ my constant %mime-types = Map.new((
   css  => 'text/css; charset=UTF-8',
   html => 'text/html; charset=UTF-8',
   ico  => 'image/x-icon',
+  json => 'text/json; charset=UTF-8',
 ));
 my constant $default-mime-type = %mime-types{''};
 
@@ -79,8 +81,8 @@ dd $io.absolute;
 multi sub serve-static($, *%) { not-found }
 
 # Subsets for routing
-subset HTML of Str  where *.ends-with('.html');
 subset CSS  of Str  where *.ends-with('.css');
+subset HTML of Str  where *.ends-with('.html');
 subset LOG  of Str  where *.ends-with('.log');
 
 subset DAY of HTML where {
@@ -318,22 +320,27 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
 
     # Set up entries for use in template
     method !ready-entries-for-template(\entries, $channel, %colors, :$short) {
+        my str $last-date = "";
         entries.map: {
             my str $date = .date.Str;
-            Map.new((
+            my $hash := Hash.new((
               channel      => $channel,
               control      => .control,
               conversation => .conversation,
               date         => $date,
               hh-mm        => .hh-mm,
               hour         => .hour,
-              human-date   =>  human-date($date, "\xa0", :$short),
+              human-date   =>  $date eq $last-date
+                                 ?? ""
+                                 !! human-date($date, "\xa0", :$short),
               message      =>  &!htmlize($_, %colors),
               minute       => .minute,
               ordinal      => .ordinal,
               sender       =>  colorize-nick(.sender, %colors),
               target       => .target.substr(11),
-            ))
+            ));
+            $last-date = $date;
+            $hash
         }
     }
 
@@ -511,7 +518,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         }
     }
 
-    # Return HTML for /search.html
+    # Return content for searches
     method !search(
       :$channel!,
       :$nicks        = "",
@@ -529,6 +536,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
       :$ignorecase,
       :$all,
       :$include-aliases,
+      :$json,      # return as JSON instead of HTML
     --> Str:D) {
         my $crot := $!templates-dir.add('search.crotmp');
         get-template-repository().refresh($crot.absolute)
@@ -568,34 +576,35 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             }
         }
         
-        if $type eq "words" && $query.comb(/ \w+ /) -> @words {
-            %params<words> := @words;
-        }
-        elsif $type eq 'contains' && $query.words -> @words {
-            %params<contains> := @words;
-        }
-        elsif $type eq 'starts-with' && $query.words -> @words {
-            %params<starts-with> := @words;
-        }
-        elsif $type eq 'matches' {
-            %params<matches> := $_ with string2regex($query);
+        if $query.words -> @words {
+            if $type eq "words" | "contains" | "starts-with" {
+                %params{$type} := @words;
+            }
+            elsif $type eq 'matches' {
+                %params<matches> := $_ with string2regex($query);
+            }
         }
 
+        my $more;
         sub find-em() {
-            if $clog.entries(|%params).head($entries-pp + 1) -> @found {
+            my $fetch = $entries-pp + 1;
+            if $clog.entries(|%params).head($$fetch) -> @found {
+                $more := @found == $fetch;
                 my %colors := $clog.colors;
-                self!ready-entries-for-template(@found, $channel, %colors, :short)
+                self!ready-entries-for-template(
+                  $forward
+                    ?? @found.head($fetch)
+                    !! @found.head($fetch).reverse,
+                  $channel,
+                  $clog.colors,
+                  :short
+                )
             }
         }
 
         my $then    := now;
         my @entries  = find-em;
         my $elapsed := ((now - $then) * 1000).Int;
-        my $more    := False;
-        if @entries == $entries-pp + 1 {
-            @entries.pop;
-            $more := True;
-        }
         my $first-date := @entries.head<date> // "";
         my $last-date  := @entries.tail<date> // "";
         my @years      := $clog.years;
@@ -607,7 +616,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
           channels           => @!channels,
           days               => 1..31,
           elapsed            => ((now - $then) * 1000).Int,
-          entries            => $forward ?? @entries !! @entries.reverse,
+          entries            => @entries,
           entries-pp         => $entries-pp,
           entries-pp-options => <25 50 100 250 500>,
           first-date         => $first-date,
@@ -630,14 +639,17 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
           to-month           => $to-month,
           to-year            => $to-year || @years.tail,
           type               => $type,
+          type-options       => (words       => "as word(s)",
+                                 contains    => "containing",
+                                 starts-with => "starting with",
+                                 matches     => "as regex"
+                                ),
           years              => @years,
         ;
 
-my \html =
-        render-template $crot, %params;
-%params<entries>:delete;
-dd %params;
-html
+        $json
+          ?? to-json(%params,:!pretty)
+          !! render-template($crot, %params)
     }
 
     proto method html(|) is implementation-detail {*}
@@ -709,8 +721,14 @@ html
                 serve-static self!home
             }
             get -> 'search.html', :%args {
-dd %args;
-                content 'text/html', self!search(|%args)
+                content
+                  'text/html; charset=UTF-8',
+                  self!search(|%args)
+            }
+            get -> 'search.json', :%args {
+                content
+                  'text/json; charset=UTF-8',
+                  self!search(:json, |%args)
             }
 
             get -> CHANNEL $channel {
@@ -718,6 +736,11 @@ dd %args;
             }
             get -> CHANNEL $channel, 'index.html' {
                 serve-static self!index($channel)
+            }
+            get -> CHANNEL $channel, 'search.html', :%args {
+                content
+                  'text/html; charset=UTF-8',
+                  self!search(:$channel, |%args)
             }
 
             get -> CHANNEL $channel, 'today' {

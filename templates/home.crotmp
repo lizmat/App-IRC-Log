@@ -21,7 +21,7 @@ The following logs are currently available (in alphabetical order):
   <@channels>
     </hr>
     <h2>#<.name> <.first-human-date> - <.last-human-date></h2>
-    <p><form action="/search.html">Search: <input name="query"/><input type="hidden" name="channel" value="<.name>"></form></p>
+    <p><form action="/<.name>/search.html">Search: <input name="query"/></form></p>
     <p>
     <@years>
       <span style="font-weight: bold"><.year>:</span>

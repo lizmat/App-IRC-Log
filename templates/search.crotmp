@@ -1,7 +1,6 @@
 <html>
 <head>
   <title>Search results on #<.name> IRC Channel</title>
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
@@ -20,7 +19,7 @@
       <tr class="<?.conversation>talk odd</?><!.conversation>special</!>" id="<.date>Z<.target>">
         <td class="date"><.human-date></td>
         <td class="time"><a href="#<.date>Z<.target>"><.hh-mm></a></td>
-        <td class="nick"><&HTML(.sender)>&nbsp;<a href="<.channel>/<.date>.html#<.target>">*</a></td>
+        <td class="nick"><&HTML(.sender)>&nbsp;<a href="/<.channel>/<.date>.html#<.target>">*</a></td>
         <td class="message"><&HTML(.message)></td>
       </tr>
     </@>
@@ -57,7 +56,7 @@
 <:sub links($_, $channel, $type, $pp)>
 <p>
 <table width="100%"><tr>
-  <form action="search.html">
+  <form action="/search.html">
   <td>
     <table><tr>
       <td>Search&nbsp;<input
@@ -72,10 +71,9 @@
       </td>
       <td><label for="type"/>
         <select name="type" id="type">
-          <option value="words"<?{ $_ eq $type }> selected</?>>as word(s)</option>
-          <option value="contains"<?{ $_ eq $type }> selected</?>>containing</option>
-          <option value="starts-with"<?{ $_ eq $type }> selected</?>>starting with</option>
-          <option value="matches"<?{ $_ eq $type }> selected</?>>as regex</option>
+          <@type-options>
+            <option value="<.key>"<?{ .key eq $type }> selected</?>><.value></option>
+          </@>
         </select>
       </td>
       <td><label for="channel">on channel</label>

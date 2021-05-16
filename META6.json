@@ -10,6 +10,7 @@
     "Cro::HTTP::Router",
     "Cro::WebApp::Template",
     "IRC::Channel::Log:ver<0.0.19>:auth<cpan:ELIZABETH>",
+    "JSON::Fast:ver<0.15>",
     "RandomColor"
   ],
   "description": "Cro application for presentating IRC logs",

@@ -33,7 +33,7 @@
 <table width="100%">
 <tr>
   <td>
-    <form action="/search.html">Search: <input name="query"/><input type="hidden" name="channel" value="<$channel>"></form>
+    <form action="search.html">Search: <input name="query"/></form>
   </td>
   <td align="right">
     <form>
