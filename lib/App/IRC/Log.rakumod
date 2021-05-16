@@ -558,7 +558,9 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         if $to-year && $to-month && $to-day {
             $to-date = Date.new($to-year, $to-month, $to-day) // Nil;
         }
-        if $from-date && $to-date {
+        if $from-date || $to-date {
+            $from-date = $clog.dates.head.Date unless $from-date;
+            $to-date   = $clog.dates.tail.Date unless $to-date;
             ($from-date, $to-date) = ($to-date, $from-date)
               if $to-date < $from-date;
             %params<dates> := $from-date .. $to-date;
