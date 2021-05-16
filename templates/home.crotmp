@@ -21,6 +21,7 @@ The following logs are currently available (in alphabetical order):
   <@channels>
     </hr>
     <h2>#<.name> <.first-human-date> - <.last-human-date></h2>
+    <p><form action="/search.html">Search: <input name="query"/><input type="hidden" name="channel" value="<.name>"></form></p>
     <p>
     <@years>
       <span style="font-weight: bold"><.year>:</span>
@@ -30,6 +31,7 @@ The following logs are currently available (in alphabetical order):
     </@>
     </p>
   </@>
-  <div id="footer">Powered by <a href="https://cro.services">Cro</a> and the <a href="https://raku.org">Raku Programming Language</a></div>
+  <div id="footer">Powered by <a href="https://cro.services">Cro</a> and the <a href="https://raku.org">Raku Programming Language</a><br/>
+  Please report any issues / comments / feature requests <a href="https://github.com/lizmat/App-IRC-Log/issues">as an issue on App::IRC::Log</a>. Thank you!</div>
 </body>
 </html>

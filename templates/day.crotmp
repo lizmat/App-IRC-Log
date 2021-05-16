@@ -23,7 +23,8 @@
     </@>
   </table>
   <&links($_, .channel, .date)>
-  <div id="footer">Powered by <a href="https://cro.services">Cro</a> and the <a href="https://raku.org">Raku Programming Language</a></div>
+  <div id="footer">Powered by <a href="https://cro.services">Cro</a> and the <a href="https://raku.org">Raku Programming Language</a><br/>
+  Please report any issues / comments / feature requests <a href="https://github.com/lizmat/App-IRC-Log/issues">as an issue on App::IRC::Log</a>. Thank you!</div>
 </body>
 </html>
 
@@ -51,7 +52,7 @@
       <a href="last"><span style="font-weight: bold">&gt;|</span></a>
     </td>
     <td>
-      <form action="/search.html">Search&nbsp;<input name="query"/><input type="hidden" name="channel" value="<$channel>"><input type="hidden" name="reverse" value="True"></form>
+      <form action="/search.html">Search&nbsp;<input name="query"/><input type="hidden" name="channel" value="<$channel>"></form>
     </td>
     <td align="right">
       <form>

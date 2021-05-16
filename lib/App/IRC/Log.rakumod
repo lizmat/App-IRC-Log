@@ -12,9 +12,9 @@ use RandomColor;
 
 # Stopgap measure until we can ask Cro
 my constant %mime-types = Map.new((
-  ''   => 'text/text',
-  css  => 'text/css',
-  html => 'text/html',
+  ''   => 'text/text; charset=UTF-8',
+  css  => 'text/css; charset=UTF-8',
+  html => 'text/html; charset=UTF-8',
   ico  => 'image/x-icon',
 ));
 my constant $default-mime-type = %mime-types{''};
@@ -108,20 +108,25 @@ my constant @human-months = <?
 >;
 
 # Turn a YYYY-MM-DD date into a human readable date
-sub human-date(str $date, :$short) {
-    my $chars := $short ?? 3 !! *;
-    $date.substr(8,2).Int
-      ~ ' '
-      ~ @human-months[$date.substr(5,2)].substr(0,$chars)
-      ~ ' '
-      ~ $date.substr(0,4)
+sub human-date(str $date, str $del = ' ', :$short) {
+    if $date {
+        my $chars := $short ?? 3 !! *;
+        $date.substr(8,2).Int
+          ~ $del
+          ~ @human-months[$date.substr(5,2)].substr(0,$chars)
+          ~ $del
+          ~ $date.substr(0,4)
+    }
 }
 
 # Turn a YYYY-MM-DD date into a human readable month
-sub human-month(str $date) {
-    @human-months[$date.substr(5,2)]
-      ~ ' '
-      ~ $date.substr(0,4)
+sub human-month(str $date, str $del = ' ', :$short) {
+    if $date {
+        my $chars := $short ?? 3 !! *;
+        @human-months[$date.substr(5,2)].substr(0,$chars)
+          ~ $del
+          ~ $date.substr(0,4)
+    }
 }
 
 # Month pulldown
@@ -313,27 +318,22 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
 
     # Set up entries for use in template
     method !ready-entries-for-template(\entries, $channel, %colors, :$short) {
-        my str $last-date = "";
         entries.map: {
             my str $date = .date.Str;
-            my $hash := Hash.new((
+            Map.new((
               channel      => $channel,
               control      => .control,
               conversation => .conversation,
               date         => $date,
               hh-mm        => .hh-mm,
               hour         => .hour,
-              human-date   => $date eq $last-date
-                                ?? ""
-                                !! human-date($date, :$short),
+              human-date   =>  human-date($date, "\xa0", :$short),
               message      =>  &!htmlize($_, %colors),
               minute       => .minute,
               ordinal      => .ordinal,
               sender       =>  colorize-nick(.sender, %colors),
               target       => .target.substr(11),
-            ));
-            $last-date = $date;
-            $hash
+            ))
         }
     }
 
@@ -428,7 +428,8 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                          Map.new((
                             channel     => $channel,
                             month       => .key,
-                            human-month => @human-months[.key.substr(5,2)],
+                            human-month =>
+                              @human-months[.key.substr(5,2)].substr(0,3),
                          ))
                       },
                     ))
@@ -512,34 +513,34 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
 
     # Return HTML for /search.html
     method !search(
-      :$query,
       :$channel!,
-      :$nicks      = "",
+      :$nicks        = "",
+      :$entries-pp   = 25,
+      :$type         = "words",
+      :$message-type = "",
+      :$query,
       :$from-year,
       :$from-month,
       :$from-day,
       :$to-year,
       :$to-month,
       :$to-day,
-      :$entries-pp = 40,
-      :$type       = "words",
-      :$reverse,
+      :$forward,
       :$ignorecase,
       :$all,
       :$include-aliases,
     --> Str:D) {
         my $crot := $!templates-dir.add('search.crotmp');
-        if $crot.modified > $!liftoff {
-            get-template-repository().refresh($crot.absolute);
-            say "refreshed $crot";
-        }
+        get-template-repository().refresh($crot.absolute)
+          if $crot.modified > $!liftoff;
         my $clog := self.clog($channel);
 
         my %params;
-        %params<all>          := True if $all;
-        %params<ignorecase>   := True if $ignorecase;
-        %params<reverse>      := True if $reverse;
-        %params<conversation> := True;
+        %params<all>        := True if $all;
+        %params<ignorecase> := True if $ignorecase;
+        %params<reverse>    := True unless $forward;
+
+        %params{$message-type} := True if $message-type;
 
         my $from-date;
         if $from-year && $from-month && $from-day {
@@ -559,7 +560,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         if $nicks {
             if $nicks.comb(/ \w+ /) -> @nicks {
                 if @nicks.map({ $clog.aliases-for-nick($_).Slip }) -> @aliases {
-                    %params<nicks> := $include-aliases ?? @nicks !! @aliases;
+                    %params<nicks> := $include-aliases ?? @aliases !! @nicks;
                 }
                 else {
                     @errors.push: "'@nicks' not known as nick(s)";
@@ -580,59 +581,63 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             %params<matches> := $_ with string2regex($query);
         }
 
-        my $then := now;
-        if $clog.entries(|%params).head($entries-pp + 1) -> @found {
-            my %colors := $clog.colors;
-            my @entries =
-              self!ready-entries-for-template(@found, $channel, %colors, :short);
-            my $elapsed := ((now - $then) * 1000).Int;
-            my $more := False;
-            if @entries == $entries-pp + 1 {
-                @entries.pop;
-                $more := True;
-            }
-            my $first-date := @entries.head<date>;
-            my $last-date  := @entries.tail<date>;
-            my @years := $clog.years;
-
-            render-template $crot, {
-              all              => $all,
-              days             => 1..31,
-              channels         => @!channels,
-              elapsed          => ((now - $then) * 1000).Int,
-              entries          => @entries,
-              first-date       => $first-date,
-              first-human-date => human-date($first-date),
-              from-day         => $from-day,
-              from-month       => $from-month,
-              from-year        => $from-year || @years.head,
-              ignorecase       => $ignorecase,
-              include-aliases  => $include-aliases,
-              last-date        => $last-date,
-              last-human-date  => $last-date ?? human-date($last-date) !! "",
-              months           => @template-months,
-              more             => $more,
-              name             => $channel,
-              nicks            => $nicks,
-              nr_entries       => +@entries,
-              query            => $query || "",
-              reverse          => $reverse,
-              to-day           => $to-day,
-              to-month         => $to-month,
-              to-year          => $to-year || @years.tail,
-              type             => $type,
-              years            => $clog.years,
+        sub find-em() {
+            if $clog.entries(|%params).head($entries-pp + 1) -> @found {
+                my %colors := $clog.colors;
+                self!ready-entries-for-template(@found, $channel, %colors, :short)
             }
         }
 
-        # nothing found
-        else {
-            render-template $crot, {
-              name     => $channel,
-              channels => @!channels,
-              query    => $query || "",
-            }
+        my $then    := now;
+        my @entries  = find-em;
+        my $elapsed := ((now - $then) * 1000).Int;
+        my $more    := False;
+        if @entries == $entries-pp + 1 {
+            @entries.pop;
+            $more := True;
         }
+        my $first-date := @entries.head<date> // "";
+        my $last-date  := @entries.tail<date> // "";
+        my @years      := $clog.years;
+
+        %params =
+          all                => $all,
+          control            => $message-type eq "control",
+          conversation       => $message-type eq "conversation",
+          channels           => @!channels,
+          days               => 1..31,
+          elapsed            => ((now - $then) * 1000).Int,
+          entries            => $forward ?? @entries !! @entries.reverse,
+          entries-pp         => $entries-pp,
+          entries-pp-options => <25 50 100 250 500>,
+          first-date         => $first-date,
+          first-human-date   => human-date($first-date),
+          forward            => $forward,
+          from-day           => $from-day,
+          from-month         => $from-month,
+          from-year          => $from-year || @years.head,
+          ignorecase         => $ignorecase,
+          include-aliases    => $include-aliases,
+          last-date          => $last-date,
+          last-human-date    => $last-date ?? human-date($last-date) !! "",
+          months             => @template-months,
+          more               => $more,
+          name               => $channel,
+          nicks              => $nicks,
+          nr-entries         => +@entries,
+          query              => $query || "",
+          to-day             => $to-day,
+          to-month           => $to-month,
+          to-year            => $to-year || @years.tail,
+          type               => $type,
+          years              => @years,
+        ;
+
+my \html =
+        render-template $crot, %params;
+%params<entries>:delete;
+dd %params;
+html
     }
 
     proto method html(|) is implementation-detail {*}
