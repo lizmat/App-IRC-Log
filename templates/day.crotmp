@@ -16,8 +16,8 @@
     </tr>
     <@entries>
       <tr class="<?.conversation>talk odd</?><!.conversation>special</!>" id="<.relative-target>">
-        <td class="time"><a href="#<.relative-target>"><.hh-mm></a></td>
-        <td class="nick"><&HTML(.sender)></td>
+        <td class="time"><.hh-mm></td>
+        <td class="nick"><&HTML(.sender)>&nbsp;<a href="#<.relative-target>">§</a></td>
         <td class="message"><&HTML(.message)></td>
       </tr>
     </@>

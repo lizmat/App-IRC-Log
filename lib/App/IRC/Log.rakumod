@@ -321,26 +321,39 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     # Set up entries for use in template
     method !ready-entries-for-template(\entries, $channel, %colors, :$short) {
         my str $last-date = "";
+        my str $last-hhmm = "";
+        my str $last-nick = "";
+        my int $last-type = -1;
         entries.map: {
             my str $date = .date.Str;
+            my str $hhmm = .hh-mm;
+            my str $nick = .sender;
+            my int $type = .control.Int;
             my $hash := Hash.new((
               channel         => $channel,
               control         => .control,
               conversation    => .conversation,
               date            => $date,
-              hh-mm           => .hh-mm,
+              hh-mm           => $hhmm eq $last-hhmm && $type == $last-type
+                                   ?? ""
+                                   !! $hhmm,
               hour            => .hour,
-              human-date      =>  $date eq $last-date
-                                    ?? ""
-                                    !! human-date($date, "\xa0", :$short),
-              message         =>  &!htmlize($_, %colors),
+              human-date      => $date eq $last-date && $type == $last-type
+                                   ?? ""
+                                   !! human-date($date, "\xa0", :$short),
+              message         => &!htmlize($_, %colors),
               minute          => .minute,
               ordinal         => .ordinal,
               relative-target => .target.substr(11),
-              sender          =>  colorize-nick(.sender, %colors),
+              sender          => $nick && $nick eq $last-nick && $type == $last-type
+                                   ?? '"'
+                                   !! colorize-nick($nick, %colors),
               target          => .target
             ));
             $last-date = $date;
+            $last-hhmm = $hhmm;
+            $last-nick = $nick;
+            $last-type = $type;
             $hash
         }
     }
@@ -657,6 +670,11 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
           last-date          => $last-date,
           last-human-date    => human-date($last-date),
           last-target        => $last-target,
+          message-options    => (""           => "all messages",
+                                 conversation => "text only",
+                                 control      => "control only",
+                                ),
+          message-type       => $message-type,
           months             => @template-months,
           more               => $more,
           name               => $channel,
@@ -670,7 +688,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
           type-options       => (words       => "as word(s)",
                                  contains    => "containing",
                                  starts-with => "starting with",
-                                 matches     => "as regex"
+                                 matches     => "as regex",
                                 ),
           years              => @years,
         ;
