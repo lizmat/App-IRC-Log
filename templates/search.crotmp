@@ -125,16 +125,16 @@
       <td></td>
       <td></td>
       <td>
-        <input type="submit" name="first" value="|&lt;"/>
+        <input type="submit" name="first" value="|&lt;" onClick="this.form.submit(); this.disabled=true; return false;"/>
         <?{ .first-target }>
           <input type="hidden" name="first-target" value="<.first-target>"/>
         </?>
-        <input type="submit" name="prev" value="&lt;"/<!{ .first-target }> disabled</!>>
+        <input type="submit" name="prev" value="&lt;"/ onClick="this.form.submit(); this.disabled=true; return false;"<!{ .first-target }> disabled</!>>
         <?{ .last-target }>
           <input type="hidden" name="last-target" value="<.last-target>"/>
         </?>
-        <input type="submit" name="next" value="&gt;"/<!{ .last-target }> disabled</!>>
-        <input type="submit" name="last" value="&gt;|"/>
+        <input type="submit" name="next" value="&gt;"/ onClick="this.form.submit(); this.disabled=true; return false;"<!{ .last-target }> disabled</!>>
+        <input type="submit" name="last" value="&gt;|" onClick="this.form.submit(); this.disabled=true; return false;"/>
       </td>
     </tr>
     <tr>

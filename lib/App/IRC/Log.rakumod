@@ -334,18 +334,22 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
               control         => .control,
               conversation    => .conversation,
               date            => $date,
-              hh-mm           => $hhmm eq $last-hhmm && $type == $last-type
+              hh-mm           => $hhmm eq $last-hhmm
+                                   && $type == $last-type
                                    ?? ""
                                    !! $hhmm,
               hour            => .hour,
-              human-date      => $date eq $last-date && $type == $last-type
+              human-date      => $date eq $last-date
+                                   && $type == $last-type
                                    ?? ""
                                    !! human-date($date, "\xa0", :$short),
               message         => &!htmlize($_, %colors),
               minute          => .minute,
               ordinal         => .ordinal,
               relative-target => .target.substr(11),
-              sender          => $nick && $nick eq $last-nick && $type == $last-type
+              sender          => $nick
+                                   && $nick eq $last-nick
+                                   && $type == $last-type
                                    ?? '"'
                                    !! colorize-nick($nick, %colors),
               target          => .target
@@ -546,12 +550,13 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
       :$to-year,
       :$to-month,
       :$to-day,
-      :$forward,
       :$ignorecase,
       :$all,
       :$include-aliases,
-      :$first-target is copy,
-      :$last-target  is copy,
+      :$first-target,
+      :$last-target,
+      :$first,
+      :$last,
       :$prev,
       :$next,
       :$json,      # return as JSON instead of HTML
@@ -561,13 +566,13 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
           if $crot.modified > $!liftoff;
         my $clog := self.clog($channel);
 
+        # Initial setup of parameters to clog.entries
         my %params;
-        %params<all>        := True if $all;
-        %params<ignorecase> := True if $ignorecase;
-        %params<reverse>    := True unless $forward;
-
+        %params<all>           := True if $all;
+        %params<ignorecase>    := True if $ignorecase;
         %params{$message-type} := True if $message-type;
 
+        # Handle period limitation
         my $from-date;
         if $from-year && $from-month && $from-day {
             $from-date = Date.new($from-year, $from-month, $from-day) // Nil;
@@ -584,14 +589,24 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             %params<dates> := $from-date .. $to-date;
         }
 
-        my $produce-reversed := !$forward;
-        if $prev && $first-target {
+        my $moving;
+        my $produces-reversed;
+        if $first {
+            $moving := True;
+        }
+        elsif $last {
+            %params<reverse>   := True;
+            $produces-reversed := True;
+            $moving            := True;
+        }
+        elsif $prev && $first-target {
             %params<before-target> := $first-target;
-            $produce-reversed := True;
+            $produces-reversed     := True;
+            $moving                := True;
         }
         elsif $next && $last-target {
             %params<after-target> := $last-target;
-            $produce-reversed := False;
+            $moving               := True;
         }
 
         my str @errors;
@@ -622,7 +637,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                 $more := @found == $fetch;
                 my %colors := $clog.colors;
                 self!ready-entries-for-template(
-                  $produce-reversed
+                  $produces-reversed
                     ?? @found.head($fetch).reverse
                     !! @found.head($fetch),
                   $channel,
@@ -635,18 +650,15 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         my $then    := now;
         my @entries  = find-em;
         my $elapsed := ((now - $then) * 1000).Int;
+
+        if !@entries && $moving {
+            response.status = 204;
+            return "";
+        }
+
         my $first-date := @entries.head<date> // "";
         my $last-date  := @entries.tail<date> // "";
         my @years      := $clog.years;
-
-        if $forward {
-            $first-target = $next ?? @entries.head<target> !! "";
-            $last-target  = $more ?? @entries.tail<target> !! "";
-        }
-        else {
-            $first-target = $more ?? @entries.head<target> !! "";
-            $last-target  = $prev ?? @entries.tail<target> !! "";
-        }
 
         %params =
           all                => $all,
@@ -660,8 +672,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
           entries-pp-options => <25 50 100 250 500>,
           first-date         => $first-date,
           first-human-date   => human-date($first-date),
-          first-target       => $first-target,
-          forward            => $forward,
+          first-target       => @entries.head<target> // "",
           from-day           => $from-day,
           from-month         => $from-month,
           from-year          => $from-year || @years.head,
@@ -669,7 +680,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
           include-aliases    => $include-aliases,
           last-date          => $last-date,
           last-human-date    => human-date($last-date),
-          last-target        => $last-target,
+          last-target        => @entries.tail<target> // "",
           message-options    => (""           => "all messages",
                                  conversation => "text only",
                                  control      => "control only",
