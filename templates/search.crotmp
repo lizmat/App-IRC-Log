@@ -17,10 +17,10 @@
       <th>Message</th>
     </tr>
     <@entries>
-      <tr class="<?.conversation>talk odd</?><!.conversation>special</!>" id="<.date>Z<.target>">
+      <tr class="<?.conversation>talk odd</?><!.conversation>special</!>" id="<.target>">
         <td class="date"><.human-date></td>
-        <td class="time"><a href="#<.date>Z<.target>"><.hh-mm></a></td>
-        <td class="nick"><&HTML(.sender)>&nbsp;<a href="/<.channel>/<.date>.html#<.target>">*</a></td>
+        <td class="time"><a href="#<.target>"><.hh-mm></a></td>
+        <td class="nick"><&HTML(.sender)>&nbsp;<a href="/<.channel>/<.date>.html#<.relative-target>">*</a></td>
         <td class="message"><&HTML(.message)></td>
       </tr>
     </@>
@@ -119,8 +119,14 @@
       <td align="right"><input type="radio" name="message-type" value="control"<?{ .control }> checked</?>> control only</td>
       <td></td>
       <td>
-        <input type="submit" name="prev" value="&lt;&lt;" disabled/>
-        <input type="submit" name="next" value="&gt;&gt;" disabled/>
+        <?{ .first-target }>
+          <input type="hidden" name="first-target" value="<.first-target>"/>
+        </?>
+        <input type="submit" name="prev" value="&lt;"/<!{ .first-target }> disabled</!>>
+        <?{ .last-target }>
+          <input type="hidden" name="last-target" value="<.last-target>"/>
+        </?>
+        <input type="submit" name="next" value="&gt;"/<!{ .last-target }> disabled</!>>
       </td>
     </tr>
     <tr>

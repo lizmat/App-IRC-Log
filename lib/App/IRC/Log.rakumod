@@ -4,7 +4,7 @@ use Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>;
 use Cro::HTTP::Router:ver<0.8.5>;
 use Cro::WebApp::Template:ver<0.8.5>;
 use Cro::WebApp::Template::Repository:ver<0.8.5>;
-use IRC::Channel::Log:ver<0.0.21>:auth<cpan:ELIZABETH>;
+use IRC::Channel::Log:ver<0.0.22>:auth<cpan:ELIZABETH>;
 use JSON::Fast:ver<0.15>;
 use RandomColor;
 
@@ -324,20 +324,21 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         entries.map: {
             my str $date = .date.Str;
             my $hash := Hash.new((
-              channel      => $channel,
-              control      => .control,
-              conversation => .conversation,
-              date         => $date,
-              hh-mm        => .hh-mm,
-              hour         => .hour,
-              human-date   =>  $date eq $last-date
-                                 ?? ""
-                                 !! human-date($date, "\xa0", :$short),
-              message      =>  &!htmlize($_, %colors),
-              minute       => .minute,
-              ordinal      => .ordinal,
-              sender       =>  colorize-nick(.sender, %colors),
-              target       => .target.substr(11),
+              channel         => $channel,
+              control         => .control,
+              conversation    => .conversation,
+              date            => $date,
+              hh-mm           => .hh-mm,
+              hour            => .hour,
+              human-date      =>  $date eq $last-date
+                                    ?? ""
+                                    !! human-date($date, "\xa0", :$short),
+              message         =>  &!htmlize($_, %colors),
+              minute          => .minute,
+              ordinal         => .ordinal,
+              relative-target => .target.substr(11),
+              sender          =>  colorize-nick(.sender, %colors),
+              target          => .target
             ));
             $last-date = $date;
             $hash
@@ -524,7 +525,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
       :$nicks        = "",
       :$entries-pp   = 25,
       :$type         = "words",
-      :$message-type = "",
+      :$message-type = "",  # control | conversation
       :$query,
       :$from-year,
       :$from-month,
@@ -536,6 +537,10 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
       :$ignorecase,
       :$all,
       :$include-aliases,
+      :$first-target is copy,
+      :$last-target  is copy,
+      :$prev,
+      :$next,
       :$json,      # return as JSON instead of HTML
     --> Str:D) {
         my $crot := $!templates-dir.add('search.crotmp');
@@ -566,6 +571,16 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             %params<dates> := $from-date .. $to-date;
         }
 
+        my $produce-reversed := !$forward;
+        if $prev && $first-target {
+            %params<before-target> := $first-target;
+            $produce-reversed := True;
+        }
+        elsif $next && $last-target {
+            %params<after-target> := $last-target;
+            $produce-reversed := False;
+        }
+
         my str @errors;
         if $nicks {
             if $nicks.comb(/ \w+ /) -> @nicks {
@@ -594,9 +609,9 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                 $more := @found == $fetch;
                 my %colors := $clog.colors;
                 self!ready-entries-for-template(
-                  $forward
-                    ?? @found.head($fetch)
-                    !! @found.head($fetch).reverse,
+                  $produce-reversed
+                    ?? @found.head($fetch).reverse
+                    !! @found.head($fetch),
                   $channel,
                   $clog.colors,
                   :short
@@ -611,6 +626,15 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         my $last-date  := @entries.tail<date> // "";
         my @years      := $clog.years;
 
+        if $forward {
+            $first-target = $next ?? @entries.head<target> !! "";
+            $last-target  = $more ?? @entries.tail<target> !! "";
+        }
+        else {
+            $first-target = $more ?? @entries.head<target> !! "";
+            $last-target  = $prev ?? @entries.tail<target> !! "";
+        }
+
         %params =
           all                => $all,
           control            => $message-type eq "control",
@@ -623,6 +647,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
           entries-pp-options => <25 50 100 250 500>,
           first-date         => $first-date,
           first-human-date   => human-date($first-date),
+          first-target       => $first-target,
           forward            => $forward,
           from-day           => $from-day,
           from-month         => $from-month,
@@ -630,7 +655,8 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
           ignorecase         => $ignorecase,
           include-aliases    => $include-aliases,
           last-date          => $last-date,
-          last-human-date    => $last-date ?? human-date($last-date) !! "",
+          last-human-date    => human-date($last-date),
+          last-target        => $last-target,
           months             => @template-months,
           more               => $more,
           name               => $channel,
