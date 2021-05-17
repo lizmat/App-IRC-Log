@@ -1,6 +1,7 @@
 <html>
 <head>
   <title>Welcome to the home of the Raku Programming Language IRC logs</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>

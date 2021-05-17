@@ -4,7 +4,7 @@ use Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>;
 use Cro::HTTP::Router:ver<0.8.5>;
 use Cro::WebApp::Template:ver<0.8.5>;
 use Cro::WebApp::Template::Repository:ver<0.8.5>;
-use IRC::Channel::Log:ver<0.0.20>:auth<cpan:ELIZABETH>;
+use IRC::Channel::Log:ver<0.0.21>:auth<cpan:ELIZABETH>;
 use JSON::Fast:ver<0.15>;
 use RandomColor;
 
@@ -75,7 +75,7 @@ dd $io.absolute;
 #        content mime-type($io), gzip($io).slurp(:bin);
 #    }
 #    else {
-            static $io.absolute, |%_;
+            static $io.absolute, :%mime-types
 #    }
 }
 multi sub serve-static($, *%) { not-found }
@@ -590,7 +590,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         my $more;
         sub find-em() {
             my $fetch = $entries-pp + 1;
-            if $clog.entries(|%params).head($$fetch) -> @found {
+            if $clog.entries(|%params).head($fetch) -> @found {
                 $more := @found == $fetch;
                 my %colors := $clog.colors;
                 self!ready-entries-for-template(
@@ -716,6 +716,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         subset CHANNEL of Str where { $_ (elem) @!channels }
 
         route {
+#            after { note .Str }   # show response headers
             get -> {
                 redirect "/home.html", :permanent
             }
@@ -723,13 +724,14 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                 serve-static self!home
             }
             get -> 'search.html', :%args {
+dd %args;
                 content
-                  'text/html; charset=UTF-8',
+                  'text/html',
                   self!search(|%args)
             }
             get -> 'search.json', :%args {
                 content
-                  'text/json; charset=UTF-8',
+                  'text/json',
                   self!search(:json, |%args)
             }
 
@@ -818,7 +820,7 @@ dd "static";
                   .add($file.substr(0,4))
                   .add($file.chop(4));
 
-                serve-static $io, :%mime-types
+                serve-static $io
             }
             get -> HTML $file {
                 serve-static self.html($file)

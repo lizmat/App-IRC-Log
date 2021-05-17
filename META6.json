@@ -9,7 +9,7 @@
     "Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>",
     "Cro::HTTP::Router",
     "Cro::WebApp::Template",
-    "IRC::Channel::Log:ver<0.0.20>:auth<cpan:ELIZABETH>",
+    "IRC::Channel::Log:ver<0.0.21>:auth<cpan:ELIZABETH>",
     "JSON::Fast:ver<0.15>",
     "RandomColor"
   ],

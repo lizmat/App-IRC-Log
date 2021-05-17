@@ -1,13 +1,14 @@
 <html>
 <head>
   <title>Search results on #<.name> IRC Channel</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
   <h1 align="center" style="font-weight: bolder">#<.name></h1>
+  <hr/>
   <&links($_, .name, .type, .entries-pp)>
   <hr/>
-  <p>(<.elapsed> msecs)</p>
   <table class="chat" valign="top">
     <tr class="head">
       <th>Date</th>
@@ -24,8 +25,12 @@
       </tr>
     </@>
   </table>
+  <hr/>
+  <&links($_, .name, .type, .entries-pp)>
   <div id="footer">Powered by <a href="https://cro.services">Cro</a> and the <a href="https://raku.org">Raku Programming Language</a><br/>
-  Please report any issues / comments / feature requests <a href="https://github.com/lizmat/App-IRC-Log/issues">as an issue on App::IRC::Log</a>. Thank you!</div>
+  Please report any issues / comments / feature requests <a href="https://github.com/lizmat/App-IRC-Log/issues">as an issue on App::IRC::Log</a>. Thank you!
+  <br/>(<.elapsed> msecs)
+  </div>
 </body>
 </html>
 
@@ -93,7 +98,7 @@
              }"
           />
       </td>
-      <td><input type="submit" value="Search"/></td>
+      <td><input type="submit" name="submit", value="Search"/></td>
     </tr>
     <tr>
       <td><input type="checkbox" name="forward" value="True"<?{ .forward }> checked</?>> oldest first</td>
@@ -112,6 +117,11 @@
       <td>From<&day-pulldown($_, 'from', .from-day)><&month-pulldown($_, 'from', .from-month)><&year-pulldown($_, 'from', .from-year)></td>
       <td><input type="checkbox" name="ignorecase" value="True"<?{ .ignorecase }> checked</?>> case insensitive</td>
       <td align="right"><input type="radio" name="message-type" value="control"<?{ .control }> checked</?>> control only</td>
+      <td></td>
+      <td>
+        <input type="submit" name="prev" value="&lt;&lt;" disabled/>
+        <input type="submit" name="next" value="&gt;&gt;" disabled/>
+      </td>
     </tr>
     <tr>
       <td>Until<&day-pulldown($_, 'to', .to-day)><&month-pulldown($_, 'to', .to-month)><&year-pulldown($_, 'to', .to-year)></td>
