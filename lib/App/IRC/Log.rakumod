@@ -605,6 +605,10 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             %params<after-target> := $last-target;
             $moving               := True;
         }
+        else {  # bare entry
+            %params<reverse>   := True;
+            $produces-reversed := True;
+        }
 
         my str @errors;
         if $nicks {
