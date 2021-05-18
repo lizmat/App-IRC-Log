@@ -11,15 +11,14 @@
   <hr/>
   <table class="chat" valign="top">
     <tr class="head">
-      <th>Date</th>
       <th>Time</th>
       <th>Nick</th>
       <th>Message</th>
     </tr>
     <@entries>
+      <?{ .human-date }><tr><td class="date" colspan="3"><hr/><.human-date><hr/></td></tr></?>
       <tr class="<?.conversation>talk odd</?><!.conversation>special</!>" id="<.target>">
-        <td class="date"><.human-date></td>
-        <td class="time"><.hh-mm></td>
+        <td class="time" align="right"><.hh-mm></td>
         <td class="nick"><&HTML(.sender)>&nbsp;<a href="/<.channel>/<.date>.html#<.relative-target>">§</a></td>
         <td class="message"><&HTML(.message)></td>
       </tr>

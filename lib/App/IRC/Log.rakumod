@@ -340,16 +340,13 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                                    !! $hhmm,
               hour            => .hour,
               human-date      => $date eq $last-date
-                                   && $type == $last-type
                                    ?? ""
                                    !! human-date($date, "\xa0", :$short),
               message         => &!htmlize($_, %colors),
               minute          => .minute,
               ordinal         => .ordinal,
               relative-target => .target.substr(11),
-              sender          => $nick
-                                   && $nick eq $last-nick
-                                   && $type == $last-type
+              sender          => $nick && $nick eq $last-nick
                                    ?? '"'
                                    !! colorize-nick($nick, %colors),
               target          => .target
