@@ -4,7 +4,7 @@ use Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>;
 use Cro::HTTP::Router:ver<0.8.5>;
 use Cro::WebApp::Template:ver<0.8.5>;
 use Cro::WebApp::Template::Repository:ver<0.8.5>;
-use IRC::Channel::Log:ver<0.0.22>:auth<cpan:ELIZABETH>;
+use IRC::Channel::Log:ver<0.0.24>:auth<cpan:ELIZABETH>;
 use JSON::Fast:ver<0.15>;
 use RandomColor;
 
@@ -533,6 +533,54 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         }
     }
 
+    # Return content for around target helper
+    method !around(
+      :$channel!,
+      :$around!,
+      :$nr-entries,
+      :$conversation,
+      :$control,
+      :$json,
+    ) {
+        my $crot := $!templates-dir.add('around.crotmp');
+        get-template-repository().refresh($crot.absolute)
+          if $crot.modified > $!liftoff;
+        my $clog := self.clog($channel);
+
+        my %params;
+        %params<channel>       := $channel;
+        %params<around-target> := $around;
+        %params<nr-entries>    := $nr-entries   if $nr-entries;
+        %params<control>       := $control      if $control;
+        %params<conversation>  := $conversation if $conversation;
+
+        sub find-em() {
+            if $clog.entries(|%params) -> @found {
+                self!ready-entries-for-template(
+                  @found, $channel, $clog.colors, :short
+                )
+            }
+        }
+
+        my $then    := now;
+        my @entries  = find-em;
+        my $elapsed := ((now - $then) * 1000).Int;
+
+        .<is-target> := True
+          given @entries[@entries.first: *.<target> eq $around, :k];
+
+        %params =
+          channel => $channel,
+          around  => $around,
+          elapsed => $elapsed,
+          entries => @entries,
+        ;
+
+        $json
+          ?? to-json(%params,:!pretty)
+          !! render-template($crot, %params)
+    }
+
     # Return content for searches
     method !search(
       :$channel!,
@@ -636,7 +684,6 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             my $fetch = $entries-pp + 1;
             if $clog.entries(|%params).head($fetch) -> @found {
                 $more := @found == $fetch;
-                my %colors := $clog.colors;
                 self!ready-entries-for-template(
                   $produces-reversed
                     ?? @found.head($fetch).reverse
@@ -781,14 +828,16 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             }
             get -> 'search.html', :%args {
 dd %args;
-                content
-                  'text/html',
-                  self!search(|%args)
+                content 'text/html', self!search(|%args)
             }
             get -> 'search.json', :%args {
-                content
-                  'text/json',
-                  self!search(:json, |%args)
+                content 'text/json', self!search(:json, |%args)
+            }
+            get -> 'around.html', :%args {
+                content 'text/html', self!around(|%args)
+            }
+            get -> 'around.json', :%args {
+                content 'text/json', self!around(:json, |%args)
             }
 
             get -> CHANNEL $channel {

@@ -9,7 +9,7 @@
     "Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>",
     "Cro::HTTP::Router",
     "Cro::WebApp::Template",
-    "IRC::Channel::Log:ver<0.0.22>:auth<cpan:ELIZABETH>",
+    "IRC::Channel::Log:ver<0.0.24>:auth<cpan:ELIZABETH>",
     "JSON::Fast:ver<0.15>",
     "RandomColor"
   ],
@@ -26,8 +26,8 @@
   "tags": [
   ],
   "test-depends": [
-    "Cro::HTTP::Server",
-    "IRC::Log::Colabti"
+    "Cro::HTTP::Server:ver<0.8.5>",
+    "IRC::Log::Colabti:ver<0.0.26>:auth<cpan:ELIZABETH>"
   ],
   "version": "0.0.1"
 }
