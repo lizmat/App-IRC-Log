@@ -9,98 +9,6 @@ use JSON::Fast:ver<0.15>;
 use RandomColor;
 
 #-------------------------------------------------------------------------------
-# Stuff related to routing
-
-# Stopgap measure until we can ask Cro
-my constant %mime-types = Map.new((
-  ''   => 'text/text; charset=UTF-8',
-  css  => 'text/css; charset=UTF-8',
-  html => 'text/html; charset=UTF-8',
-  ico  => 'image/x-icon',
-  json => 'text/json; charset=UTF-8',
-));
-my constant $default-mime-type = %mime-types{''};
-
-# Return MIME type for a given IO
-sub mime-type(IO:D $io) {
-    my $basename := $io.basename;
-    with $basename.rindex('.') {
-        %mime-types{$basename.substr($_ + 1)}
-          // $default-mime-type
-    }
-    else {
-        $default-mime-type
-    }
-}
-
-# Return IO for gzipped version of given IO
-sub gzip(IO:D $io) {
-    my $gzip := $io.sibling($io.basename ~ '.gz');
-    run('gzip', '--keep', '--force', $io.absolute)
-      if !$gzip.e || $gzip.modified < $io.modified;
-    $gzip
-}
-
-# Return the clients Accept-Encoding
-sub accept-encoding() {
-    with request.headers.first: *.name eq 'Accept-Encoding' {
-        .value
-    }
-    else {
-        ''
-    }
-}
-
-# Return whether client accepts gzip
-sub may-serve-gzip() {
-    accept-encoding.contains('gzip')
-}
-
-# Render HTML given IO and template and make sure there is a
-# gzipped version for it as well
-sub render(IO:D $html, IO:D $crot, %_ --> Nil) {
-    get-template-repository().refresh($crot.absolute)
-      if $html.e && $html.modified < $crot.modified;
-    $html.spurt: render-template $crot, %_;
-    gzip($html);
-}
-
-# Serve the given IO as a static file
-multi sub serve-static(IO:D $io is copy, *%_) {
-dd $io.absolute;
-#    if may-serve-gzip() {
-#dd "serving zipped";
-#        header 'Transfer-Encoding', 'gzip';
-#        static gzip($io).absolute, |c, :mime-types({ 'gz' => mime-type($io) });
-#        content mime-type($io), gzip($io).slurp(:bin);
-#    }
-#    else {
-            static $io.absolute, :%mime-types
-#    }
-}
-multi sub serve-static($, *%) { not-found }
-
-# Subsets for routing
-subset CSS  of Str  where *.ends-with('.css');
-subset HTML of Str  where *.ends-with('.html');
-subset LOG  of Str  where *.ends-with('.log');
-
-subset DAY of HTML where {
-    try .IO.basename.substr(0,10).Date
-}
-subset YEAR of Str where {
-    try .chars == 4 && .Int
-}
-subset MONTH of Str where {
-    try .chars == 7
-      && .substr(0,4).Int             # year ok
-      && 0 <= .substr(5,2).Int <= 13  # month ok, allow for offset of 1
-}
-subset DATE of Str where {
-    try .Date
-}
-
-#-------------------------------------------------------------------------------
 # Stuff for creating values for templates
 
 # Hash for humanizing dates
@@ -314,32 +222,37 @@ sub mark-camelia-invocations(@entries --> Nil) {
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
 #
-# Determine default channels from a given directory
-my sub default-channels(IO:D $log-dir) {
-    $log-dir.dir.map({ 
-      .basename
-      if .d
-      && !.basename.starts-with('.')
-      && .dir(:test(/ ^ \d\d\d\d $ /)).elems
-    }).sort
-}
 
 class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
-    has         $.log-class     is required is built(:bind);
-    has IO()    $.log-dir       is required;
-    has IO()    $.html-dir      is required;
-    has IO()    $.templates-dir is required;
-    has IO()    $.state-dir     is required;
-    has         &.htmlize is built(:bind) = &htmlize;
-    has Instant $.liftoff is built(:bind) = $?FILE.words.head.IO.modified;
-    has str     @.channels    = default-channels($!log-dir);
-    has         @.day-plugins = (&merge-control-messages,
-                                 &merge-commit-messages, 
-                                 &mark-camelia-invocations
-                                ).Slip;
-    has         %!channels;
+    has         $.log-class    is required is built(:bind);
+    has IO()    $.log-dir      is required;  # IRC-logs
+    has IO()    $.static-dir   is required;  # static files, e.g. favicon.ico
+    has IO()    $.template-dir is required;  # templates
+    has IO()    $.rendered-dir is required;  # renderings of template
+    has IO()    $.state-dir    is required;  # saving state
+    has IO()    $.zip-dir;                   # saving zipped renderings
+    has Instant $.liftoff is built(:bind) = $*INIT-INSTANT;
+
+    has str @.channels = self!default-channels;
+    has     %!channels;
+
+    has     &.htmlize is built(:bind) = &htmlize;
+    has     @.day-plugins = (&merge-control-messages,
+                             &merge-commit-messages, 
+                             &mark-camelia-invocations
+                            ).Slip;
 
     my constant $nick-colors-json = 'nicks.json';
+
+    # Determine default channels from the logdir
+    method !default-channels() {
+        $!log-dir.dir.map({ 
+          .basename
+          if .d
+          && !.basename.starts-with('.')
+          && .dir(:test(/ ^ \d\d\d\d $ /)).elems
+        }).sort
+    }
 
     # Start loading the logs asynchronously.  No need to be thread-safe
     # here as here will only be the thread creating the object.
@@ -361,6 +274,9 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     method shutdown(App::IRC::Log:D: --> Nil) {
         self.clog($_).shutdown for @!channels;
     }
+
+#-------------------------------------------------------------------------------
+# Methods related to rendering
 
     # Return IRC::Channel::Log object for given channel
     method clog(App::IRC::Log:D: str $channel --> IRC::Channel::Log:D) {
@@ -425,9 +341,8 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     method !day($channel, $file --> IO:D) {
         my $date := $file.chop(5);
         my $Date := $date.Date;
-        my $dir  := $!html-dir.add($channel).add($Date.year);
-        my $html := $dir.add($date ~ '.html');
-        my $crot := $!templates-dir.add('day.crotmp');
+        my $html := $!rendered-dir.add($channel).add($Date.year).add($date ~ '.html');
+        my $crot := $!template-dir.add('day.crotmp');
 
         # Need to (re-)render
         if !$html.e                           # file does not exist
@@ -452,8 +367,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             }
 
             # Render it!
-            $dir.mkdir;
-            render $html, $crot, {
+            self!render: $!rendered-dir, $html, $crot, {
               :$channel,
               :@!channels,
               :$date,
@@ -478,8 +392,8 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
 
     # Return an IO object for /home.html
     method !home(--> IO:D) {
-        my $html := $!html-dir.add('home.html');
-        my $crot := $!templates-dir.add('home.crotmp');
+        my $html := $!rendered-dir.add('home.html');
+        my $crot := $!template-dir.add('home.crotmp');
 
         if !$html.e                           # file does not exist
           || $html.modified < $!liftoff       # file is too old
@@ -514,18 +428,25 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                 ))
             }
 
-            render $html, $crot, {
+            self!render: $!rendered-dir, $html, $crot, {
               channels => @channels,
             }
         }
         $html
     }
 
+    method !template-for(str $channel, str $name) {
+        my str $filename = $name ~ '.crotmp';
+        my $crot := $!template-dir.add($channel).add($filename);
+        $crot.e
+          ?? $crot
+          !! $!template-dir.add: $filename
+    }
+
     # Return an IO object for /channel/index.html
     method !index(str $channel --> IO:D) {
-        my $html := $!html-dir.add($channel).add('index.html');
-        my $crot := $!templates-dir.add($channel).add('index.crotmp');
-        $crot := $!templates-dir.add('index.crotmp') unless $crot.e;
+        my $html := $!rendered-dir.add($channel).add('index.html');
+        my $crot := self!template-for($channel, 'index');
 
         if !$html.e                           # file does not exist
           || $html.modified < $!liftoff       # file is too old
@@ -557,7 +478,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                 ))
             }
 
-            render $html, $crot, {
+            self!render: $!rendered-dir, $html, $crot, {
               name             => $channel,
               channels         => @!channels,
               years            => @years,
@@ -590,8 +511,8 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
       :$control,
       :$json,
     ) {
-        my $crot := $!templates-dir.add('around.crotmp');
-        get-template-repository().refresh($crot.absolute)
+        my $crot := self!template-for($channel, 'around');
+        get-template-repository.refresh($crot.absolute)
           if $crot.modified > $!liftoff;
         my $clog := self.clog($channel);
 
@@ -626,7 +547,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
 
         $json
           ?? to-json(%params,:!pretty)
-          !! render-template($crot, %params)
+          !! render-template $crot, %params
     }
 
     # Return content for searches
@@ -654,8 +575,8 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
       :$next,
       :$json,      # return as JSON instead of HTML
     --> Str:D) {
-        my $crot := $!templates-dir.add('search.crotmp');
-        get-template-repository().refresh($crot.absolute)
+        my $crot := self!template-for($channel, 'search');
+        get-template-repository.refresh($crot.absolute)
           if $crot.modified > $!liftoff;
         my $clog := self.clog($channel);
 
@@ -802,7 +723,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
 
         $json
           ?? to-json(%params,:!pretty)
-          !! render-template($crot, %params)
+          !! render-template $crot, %params
     }
 
     proto method html(|) is implementation-detail {*}
@@ -811,10 +732,10 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     multi method html($channel, $file --> IO:D) {
         my $template := $file.chop(5) ~ '.crotmp';
 
-        my $dir  := $!html-dir.add($channel);
+        my $dir  := $!static-dir.add($channel);
         my $html := $dir.add($file);
-        my $crot := $!templates-dir.add($channel).add($template);
-        $crot := $!templates-dir.add($template) unless $crot.e;
+        my $crot := $!template-dir.add($channel).add($template);
+        $crot := $!template-dir.add($template) unless $crot.e;
 
         # No template, if there's bare HTML, serve it
         if !$crot.e {
@@ -828,7 +749,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                                 | $crot.modified  # or template changed
             {
                 $dir.mkdir;
-                render $html, $crot, {
+                self!render: $!static-dir, $html, $crot, {
                   :$channel,
                 }
             }
@@ -840,8 +761,8 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     multi method html($file --> IO:D) {
         my $template := $file.chop(5) ~ '.crotmp';
 
-        my $html := $!html-dir.add($file);
-        my $crot := $!templates-dir.add($template);
+        my $html := $!static-dir.add($file);
+        my $crot := $!template-dir.add($template);
 
         # No template, if there's bare HTML, serve it
         if !$crot.e {
@@ -854,12 +775,118 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
               || $html.modified < $!liftoff       # file is too old
                                 | $crot.modified  # or template changed
             {
-                render $html, $crot, {
+                self!render: $!static-dir, $html, $crot, {
                   channels => @!channels,
                 }
             }
             $html
         }
+    }
+
+#--------------------------------------------------------------------------------
+# Methods related to routing
+
+    # Stopgap measure until we can ask Cro
+    my constant %mime-types = Map.new((
+      ''   => 'text/text; charset=UTF-8',
+      css  => 'text/css; charset=UTF-8',
+      html => 'text/html; charset=UTF-8',
+      ico  => 'image/x-icon',
+      json => 'text/json; charset=UTF-8',
+    ));
+    my constant $default-mime-type = %mime-types{''};
+
+    # Return MIME type for a given IO
+    sub mime-type(IO:D $io) {
+        my $basename := $io.basename;
+        with $basename.rindex('.') {
+            %mime-types{$basename.substr($_ + 1)}
+              // $default-mime-type
+        }
+        else {
+            $default-mime-type
+        }
+    }
+
+    # Return the clients Accept-Encoding
+    sub accept-encoding() {
+        with request.headers.first: *.name eq 'Accept-Encoding' {
+            .value
+        }
+        else {
+            ''
+        }
+    }
+
+    # Serve the given IO as a static file
+    multi sub serve-static(IO:D $io is copy, *%_) {
+        dd $io.absolute;
+#        if may-serve-gzip() {
+#dd "serving zipped";
+#            header 'Transfer-Encoding', 'gzip';
+#            static self!gzip($io).absolute, |c, :mime-types({ 'gz' => mime-type($io) });
+#            content mime-type($io), gzip($io).slurp(:bin);
+#        }
+#        else {
+                    static $io.absolute, :%mime-types
+#        }
+    }
+    multi sub serve-static($, *%) { not-found }
+
+    # Return whether client accepts gzip
+    method !may-serve-gzip() {
+        $!zip-dir && accept-encoding.contains('gzip')
+    }
+
+    # Return IO for gzipped version of given IO
+    method !gzip(IO:D $base-dir, IO:D $io) {
+        my $io-absolute := $io.absolute;
+        my $path := $io-absolute.substr($base-dir.absolute.chars);
+        my $gzip := $!zip-dir.add($path);
+        if !$gzip.e || $gzip.modified < $io.modified {
+            my $proc := run(
+              'gzip', '--stdout', '--force', $io-absolute,
+              :bin, :out
+            );
+            mkdir $gzip.parent;
+            $gzip.spurt($proc.out.slurp, :bin);
+        }
+        $gzip
+    }
+
+    # Render text of given IO and template and make sure there is a
+    # gzipped version for it as well if there's a place to store it
+    method !render(
+      IO:D $base-dir, IO:D $file, IO:D $crot, %params
+    --> Nil) {
+
+        # Remove cached template if it was changed
+        get-template-repository.refresh($crot.absolute)
+          if $file.e && $file.modified < $crot.modified;
+
+        $file.parent.mkdir;
+        $file.spurt: render-template $crot, %params;
+        self!gzip($base-dir, $file) if $!zip-dir;
+    }
+
+    # Subsets for routing
+    subset CSS  of Str  where *.ends-with('.css');
+    subset HTML of Str  where *.ends-with('.html');
+    subset LOG  of Str  where *.ends-with('.log');
+
+    subset DAY of HTML where {
+        try .IO.basename.substr(0,10).Date
+    }
+    subset YEAR of Str where {
+        try .chars == 4 && .Int
+    }
+    subset MONTH of Str where {
+        try .chars == 7
+          && .substr(0,4).Int             # year ok
+          && 0 <= .substr(5,2).Int <= 13  # month ok, allow for offset of 1
+    }
+    subset DATE of Str where {
+        try .Date
     }
 
     # Return the actual Cro application to be served
@@ -964,8 +991,8 @@ dd "static";
                 serve-static self.html($channel, $file);
             }
             get -> CHANNEL $channel, CSS $file {
-                my $io := $!html-dir.add($channel).add($file);
-                serve-static $io.e ?? $io !! $!html-dir.add($file)
+                my $io := $!static-dir.add($channel).add($file);
+                serve-static $io.e ?? $io !! $!static-dir.add($file)
             }
             get -> CHANNEL $channel, LOG $file {
                 my $io := $!log-dir
@@ -980,7 +1007,7 @@ dd "static";
             }
 
             get -> $file {
-                serve-static $!html-dir.add($file)
+                serve-static $!static-dir.add($file)
             }
 
             get -> |c {

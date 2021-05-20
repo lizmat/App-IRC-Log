@@ -1,17 +1,19 @@
 #!/usr/bin/env raku
 
+use v6.*;
+
 use IRC::Log::Colabti:ver<0.0.27>:auth<cpan:ELIZABETH>;
 use Cro::HTTP::Server:ver<0.8.5>;
-
-use lib 'lib';
-use App::IRC::Log;
+use App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH>;;
 
 my $ail := App::IRC::Log.new:
-  log-class     => IRC::Log::Colabti,
-  log-dir       => "logs",
-  html-dir      => "html",
-  templates-dir => "templates",
-  state-dir     => 'state',
+  log-class    => IRC::Log::Colabti,
+  log-dir      => "logs",
+  static-dir   => "static",
+  template-dir => "templates",
+  rendered-dir => "rendered",
+  state-dir    => 'state',
+  zip-dir      => 'zipped',
 ;
 
 my $application := $ail.application;
