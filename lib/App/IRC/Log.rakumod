@@ -196,46 +196,34 @@ sub htmlize($entry, %colors) {
     # Something with a text
     if $entry.conversation {
 
-        # An invocation of Camelia, assume it's code
-        if $text.starts-with("m: ") {
-            $text = $text.substr(0,3)
-              ~ '<div id="code">'
-              ~ $text.substr(3)
-              ~ '</div>';
+        # URL linking
+        $text .= subst(
+          / https? '://' \S+ /,
+          { '<a href="' ~ $/~ '">' ~ $/ ~ '</a>' },
+          :global
+        );
+
+        # Nick highlighting
+        if $entry.^name.ends-with("Topic") {
+            $text .= subst(/ ^ \S+ /, { colorize-nick($/, %colors) });
+        }
+        else {
+            my str $last-del = ' ';
+            $text = $text.split(@delimiters, :v).map(-> $word, $del = '' {
+                my $mapped := $word.chars < 3
+                  || %stop-nicks{$word.lc}
+                  || $last-del ne ' '
+                  ?? $word ~ $del
+                  !! colorize-nick($word, %colors) ~ $del;
+                $last-del = $del;
+                $mapped
+            }).join;
         }
 
-        # Do the various tweaks
-        else {
-
-            # URL linking
-            $text .= subst(
-              / https? '://' \S+ /,
-              { '<a href="' ~ $/~ '">' ~ $/ ~ '</a>' },
-              :global
-            );
-
-            # Nick highlighting
-            if $entry.^name.ends-with("Topic") {
-                $text .= subst(/ ^ \S+ /, { colorize-nick($/, %colors) });
-            }
-            else {
-                my str $last-del = ' ';
-                $text = $text.split(@delimiters, :v).map(-> $word, $del = '' {
-                    my $mapped := $word.chars < 3
-                      || %stop-nicks{$word.lc}
-                      || $last-del ne ' '
-                      ?? $word ~ $del
-                      !! colorize-nick($word, %colors) ~ $del;
-                    $last-del = $del;
-                    $mapped
-                }).join;
-            }
-
-            # Thought highlighting
-            if $entry.^name.ends-with("Self-Reference")
-              || $text.starts-with(".oO(") {
-                $text = '<div id="thought">' ~ $text ~ '</div>'
-            }
+        # Thought highlighting
+        if $entry.^name.ends-with("Self-Reference")
+          || $text.starts-with(".oO(") {
+            $text = '<div id="thought">' ~ $text ~ '</div>'
         }
     }
 
@@ -253,6 +241,79 @@ sub htmlize($entry, %colors) {
     $text
 }
 
+# Merge control messages inside the same minute
+sub merge-control-messages(@entries) {
+    my $merging;
+    for @entries.kv -> $index, %entry {
+        if %entry<ordinal> {
+            if %entry<control> {
+                if $merging || @entries[$index - 1]<control> {
+                    $merging = $index - 1 without $merging;
+                    @entries[$merging]<message> ~= ", %entry<message>";
+                    @entries[$index] = Any;
+                }
+            }
+            else {
+                $merging = Any;
+            }
+        }
+        else {
+            $merging = Any;
+        }
+    }
+    @entries.grep(*.defined);
+}
+
+# Merge messages of a commit together
+sub merge-commit-messages(@entries) {
+    for @entries.kv -> $index, %entry {
+        if %entry<conversation> {
+            with %entry<message>.index(
+              ": review:"
+            ) -> int $pos is copy {
+                my $message := %entry<message>;
+                my $prefix  := $message.substr(0,++$pos);
+                my int $i    = $index;
+                while --$i >= 0 && @entries[$i] -> \entry {
+                    last unless entry<message>.starts-with($prefix);
+                }
+
+                if ++$i < $index {
+                    my int $final = $i;
+                    my str $message = @entries[$i]<message>;
+                    while ++$i <= $index && @entries[$i] -> \entry {
+                        $message = $message
+                          ~ '<br/> &nbsp;&nbsp;'
+                          ~ entry<message>.substr($pos);
+                        entry = Any;
+                    }
+                    with @entries[$final] -> \entry {
+                        entry<message> := $message;
+                        entry<commit>  := True;
+                    }
+                }
+            }
+        }
+    }
+    @entries = @entries.grep(*.defined);
+}
+
+# Check for invocations of Camelia, assume it's code
+sub mark-camelia-invocations(@entries --> Nil) {
+    for @entries -> \entry {
+        if entry<conversation> && entry<message> -> \message {
+            entry<message> := message.substr(0,3)
+              ~ '<div id="code">'
+              ~ message.substr(3)
+              ~ '</div>'
+            if message.starts-with('m: ');
+        }
+    }
+}
+
+#-------------------------------------------------------------------------------
+# App::IRC::Log class
+#
 # Determine default channels from a given directory
 my sub default-channels(IO:D $log-dir) {
     $log-dir.dir.map({ 
@@ -263,18 +324,19 @@ my sub default-channels(IO:D $log-dir) {
     }).sort
 }
 
-#-------------------------------------------------------------------------------
-# App::IRC::Log class
-#
 class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required is built(:bind);
     has IO()    $.log-dir       is required;
     has IO()    $.html-dir      is required;
     has IO()    $.templates-dir is required;
     has IO()    $.state-dir     is required;
-    has         &.htmlize     is built(:bind) = &htmlize;
-    has Instant $.liftoff     is built(:bind) = $?FILE.words.head.IO.modified;
-    has str     @.channels = default-channels($!log-dir);
+    has         &.htmlize is built(:bind) = &htmlize;
+    has Instant $.liftoff is built(:bind) = $?FILE.words.head.IO.modified;
+    has str     @.channels    = default-channels($!log-dir);
+    has         @.day-plugins = (&merge-control-messages,
+                                 &merge-commit-messages, 
+                                 &mark-camelia-invocations
+                                ).Slip;
     has         %!channels;
 
     my constant $nick-colors-json = 'nicks.json';
@@ -382,57 +444,12 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             my @entries =
               self!ready-entries-for-template($log.entries, $channel, %colors);
 
-            # Merge control messages inside the same minute
-            my $merging;
-            for @entries.kv -> $index, %entry {
-                if %entry<ordinal> {
-                    if %entry<control> {
-                        if $merging || @entries[$index - 1]<control> {
-                            $merging = $index - 1 without $merging;
-                            @entries[$merging]<message> ~= ", %entry<message>";
-                            @entries[$index] = Any;
-                        }
-                    }
-                    else {
-                        $merging = Any;
-                    }
-                }
-                else {
-                    $merging = Any;
-                }
+            # Run all the plugins
+            for @!day-plugins -> &plugin {
+                &plugin.returns ~~ Nil
+                  ?? plugin(@entries)
+                  !! (@entries = plugin(@entries))
             }
-            @entries = @entries.grep(*.defined);
-
-            for @entries.kv -> $index, %entry {
-                if %entry<conversation> {
-                    with %entry<message>.index(
-                      ": review:"
-                    ) -> int $pos is copy {
-                        my $message := %entry<message>;
-                        my $prefix  := $message.substr(0,++$pos);
-                        my int $i    = $index;
-                        while --$i >= 0 && @entries[$i] -> \entry {
-                            last unless entry<message>.starts-with($prefix);
-                        }
-
-                        if ++$i < $index {
-                            my int $final = $i;
-                            my str $message = @entries[$i]<message>;
-                            while ++$i <= $index && @entries[$i] -> \entry {
-                                $message = $message
-                                  ~ '<br/> &nbsp;&nbsp;'
-                                  ~ entry<message>.substr($pos);
-                                entry = Any;
-                            }
-                            with @entries[$final] -> \entry {
-                                entry<message> := $message;
-                                entry<commit>  := True;
-                            }
-                        }
-                    }
-                }
-            }
-            @entries = @entries.grep(*.defined);
 
             # Render it!
             $dir.mkdir;
