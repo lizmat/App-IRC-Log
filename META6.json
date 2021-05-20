@@ -7,8 +7,8 @@
   ],
   "depends": [
     "Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>",
-    "Cro::HTTP::Router",
-    "Cro::WebApp::Template",
+    "Cro::HTTP::Router:ver<0.8.5>",
+    "Cro::WebApp::Template:ver<0.8.5>",
     "IRC::Channel::Log:ver<0.0.24>:auth<cpan:ELIZABETH>",
     "JSON::Fast:ver<0.15>",
     "RandomColor"
@@ -27,7 +27,7 @@
   ],
   "test-depends": [
     "Cro::HTTP::Server:ver<0.8.5>",
-    "IRC::Log::Colabti:ver<0.0.26>:auth<cpan:ELIZABETH>"
+    "IRC::Log::Colabti:ver<0.0.27>:auth<cpan:ELIZABETH>"
   ],
   "version": "0.0.1"
 }

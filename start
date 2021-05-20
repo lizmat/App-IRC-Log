@@ -1,6 +1,6 @@
 #!/usr/bin/env raku
 
-use IRC::Log::Colabti:ver<0.0.26>:auth<cpan:ELIZABETH>;
+use IRC::Log::Colabti:ver<0.0.27>:auth<cpan:ELIZABETH>;
 use Cro::HTTP::Server:ver<0.8.5>;
 
 use lib 'lib';

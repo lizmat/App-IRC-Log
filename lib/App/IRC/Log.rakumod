@@ -403,6 +403,37 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
             }
             @entries = @entries.grep(*.defined);
 
+            for @entries.kv -> $index, %entry {
+                if %entry<conversation> {
+                    with %entry<message>.index(
+                      ": review:"
+                    ) -> int $pos is copy {
+                        my $message := %entry<message>;
+                        my $prefix  := $message.substr(0,++$pos);
+                        my int $i    = $index;
+                        while --$i >= 0 && @entries[$i] -> \entry {
+                            last unless entry<message>.starts-with($prefix);
+                        }
+
+                        if ++$i < $index {
+                            my int $final = $i;
+                            my str $message = @entries[$i]<message>;
+                            while ++$i <= $index && @entries[$i] -> \entry {
+                                $message = $message
+                                  ~ '<br/> &nbsp;&nbsp;'
+                                  ~ entry<message>.substr($pos);
+                                entry = Any;
+                            }
+                            with @entries[$final] -> \entry {
+                                entry<message> := $message;
+                                entry<commit>  := True;
+                            }
+                        }
+                    }
+                }
+            }
+            @entries = @entries.grep(*.defined);
+
             # Render it!
             $dir.mkdir;
             render $html, $crot, {
