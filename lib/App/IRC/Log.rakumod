@@ -257,6 +257,26 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     # Start loading the logs asynchronously.  No need to be thread-safe
     # here as here will only be the thread creating the object.
     submethod TWEAK(--> Nil) {
+        my @problems;
+        for
+          log-dir => $!log-dir,
+          static-dir => $!static-dir,
+          template-dir => $!template-dir,
+          rendered-dir => $!rendered-dir,
+          state-dir    => $!state-dir
+        -> (:key($name), :value($io)) {
+            @problems.push("'$name' does not point to a valid directory: $io")
+              unless $io.e && $io.d;
+        }
+        if $!zip-dir -> $io {
+            @problems.push("'zip-dir' does not point to a valid directory: $io")
+              unless $io.e && $io.d;
+        }
+        if @problems {
+            die ("Found problems in directory specification:",
+              |@problems).join: "\n  ";
+        }
+
         %!channels{$_} := start {
             my $clog := IRC::Channel::Log.new:
               logdir    => $!log-dir.add($_),
@@ -350,14 +370,13 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                             | $crot.modified  # or template changed
         {
 
-            # Fetch the log and nick coloring
-            my $clog   := self.clog($channel);
-            my $log    := $clog.log($date);
-            my %colors := $clog.colors;
-
             # Set up entries for use in template
-            my @entries =
-              self!ready-entries-for-template($log.entries, $channel, %colors);
+            my $clog := self.clog($channel);
+            my @entries = self!ready-entries-for-template(
+              $clog.log($date).entries,
+              $channel,
+              $clog.colors
+            );
 
             # Run all the plugins
             for @!day-plugins -> &plugin {
@@ -842,7 +861,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     method !gzip(IO:D $base-dir, IO:D $io) {
         my $io-absolute := $io.absolute;
         my $path := $io-absolute.substr($base-dir.absolute.chars);
-        my $gzip := $!zip-dir.add($path);
+        my $gzip := $!zip-dir.add($path ~ '.gz');
         if !$gzip.e || $gzip.modified < $io.modified {
             my $proc := run(
               'gzip', '--stdout', '--force', $io-absolute,
