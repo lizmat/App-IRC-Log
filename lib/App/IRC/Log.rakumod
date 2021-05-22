@@ -182,18 +182,30 @@ sub merge-commit-messages(@entries) {
                 my $message := %entry<message>;
                 my $prefix  := $message.substr(0,++$pos);
                 my int $i    = $index;
+                my int $skipped;
                 while --$i >= 0 && @entries[$i] -> \entry {
-                    last unless entry<message>.starts-with($prefix);
+                    if entry<message>.starts-with($prefix) {
+                        $skipped = 0;
+                    }
+                    elsif $skipped == 2 {
+                        $i += $skipped;
+                        last;
+                    }
+                    else {
+                        ++$skipped;
+                    }
                 }
 
                 if ++$i < $index {
                     my int $final = $i;
                     my str $message = @entries[$i]<message>;
                     while ++$i <= $index && @entries[$i] -> \entry {
-                        $message = $message
-                          ~ '<br/> &nbsp;&nbsp;'
-                          ~ entry<message>.substr($pos);
-                        entry = Any;
+                        if entry<message>.starts-with($prefix) {
+                            $message = $message
+                              ~ '<br/> &nbsp;&nbsp;'
+                              ~ entry<message>.substr($pos);
+                            entry = Any;
+                        }
                     }
                     with @entries[$final] -> \entry {
                         entry<message> := $message;
@@ -203,7 +215,64 @@ sub merge-commit-messages(@entries) {
             }
         }
     }
-    @entries = @entries.grep(*.defined);
+    @entries.grep(*.defined);
+}
+
+# Merge messages of test-t report together
+sub merge-test-t-messages(@entries) {
+    my constant %head = Set.new: <
+      csv-ip5xs csv-ip5xs-20 csv-parser csv-test-xs-20
+      test test-t test-t-20
+    >;
+    my constant Tux = '[Tux]';
+
+    for @entries.kv -> $index, \entry {
+        if entry
+          && entry<conversation>
+          && entry<nick> eq Tux
+          && entry<message> -> \message {
+            with message.index(" ") -> \pos {
+                if message.substr(0,pos) eq 'Rakudo' {
+                    my %tests;
+                    my int $i    = $index;
+                    my int $skipped;
+                    while @entries[++$i] -> \this-entry {
+                        with this-entry<nick> eq Tux {
+                            if this-entry<message> -> \this-message {
+                                with this-message.index(" ") -> \pos {
+                                    my $first := this-message.substr(0,pos);
+                                    if %head{$first} {
+                                        %tests{$first} = this-message;
+                                        @entries[$i] = Any;
+                                        $skipped = 0;
+                                    }
+                                }
+                            }
+                            elsif ++$skipped == 3 {
+                                last;
+                            }
+                        }
+                    }
+                    entry<message> := '<table><tr colspan="3">'
+                      ~ message
+                      ~ "</tr>\n"
+                      ~ %tests.sort.map( -> (:key($name), :value($message)) {
+                        '<tr>'
+                          ~ ('<td>' ~ $name ~ '</td>')
+                          ~ $message.words.skip.map({
+                              '<td align="right">'
+                                ~ $_
+                                ~ '</td>'
+                            })
+                          ~ "</tr>"
+                        }).join("\n")
+                      ~ '</table>';
+                    entry<test-t>  := True;
+                }
+            }
+        }
+    }
+    @entries.grep(*.defined);
 }
 
 # Check for invocations of Camelia, assume it's code
@@ -239,6 +308,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     has     &.htmlize is built(:bind) = &htmlize;
     has     @.day-plugins = (&merge-control-messages,
                              &merge-commit-messages, 
+                             &merge-test-t-messages, 
                              &mark-camelia-invocations
                             ).Slip;
 
@@ -341,6 +411,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
                                    ?? ""
                                    !! human-date($date, "\xa0", :$short),
               message         => &!htmlize($_, %colors),
+              nick            => $nick,
               minute          => .minute,
               ordinal         => .ordinal,
               relative-target => .target.substr(11),
