@@ -4,7 +4,7 @@ use Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>;
 use Cro::HTTP::Router:ver<0.8.5>;
 use Cro::WebApp::Template:ver<0.8.5>;
 use Cro::WebApp::Template::Repository:ver<0.8.5>;
-use IRC::Channel::Log:ver<0.0.24>:auth<cpan:ELIZABETH>;
+use IRC::Channel::Log:ver<0.0.25>:auth<cpan:ELIZABETH>;
 use JSON::Fast:ver<0.15>;
 use RandomColor;
 
@@ -154,8 +154,8 @@ sub merge-control-messages(@entries) {
     my $merging;
     for @entries.kv -> $index, %entry {
         if %entry<ordinal> {
-            if %entry<control> {
-                if $merging || @entries[$index - 1]<control> {
+            if !%entry<conversation> {
+                if $merging || !@entries[$index - 1]<conversation> {
                     $merging = $index - 1 without $merging;
                     @entries[$merging]<message> ~= ", %entry<message>";
                     @entries[$index] = Any;
@@ -253,7 +253,7 @@ sub merge-test-t-messages(@entries) {
                             }
                         }
                     }
-                    entry<message> := '<table><tr colspan="3">'
+                    entry<message> := '<table><tr colspan="4">'
                       ~ message
                       ~ "</tr>\n"
                       ~ %tests.sort.map( -> (:key($name), :value($message)) {
@@ -647,22 +647,22 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
       :$entries-pp   = 25,
       :$type         = "words",
       :$message-type = "",  # control | conversation
-      :$query,
-      :$from-year,
-      :$from-month,
-      :$from-day,
-      :$to-year,
-      :$to-month,
-      :$to-day,
-      :$ignorecase,
-      :$all,
-      :$include-aliases,
-      :$first-target,
-      :$last-target,
-      :$first,
-      :$last,
-      :$prev,
-      :$next,
+      :$query        = "",
+      :$from-year    = "",
+      :$from-month   = "",
+      :$from-day     = "",
+      :$to-year      = "",
+      :$to-month     = "",
+      :$to-day       = "",
+      :$ignorecase   = "",
+      :$all          = "",
+      :$include-aliases = "",
+      :$first-target = "",
+      :$last-target  = "",
+      :$first = "",
+      :$last  = "",
+      :$prev  = "",
+      :$next  = "",
       :$json,      # return as JSON instead of HTML
     --> Str:D) {
         my $crot := self!template-for($channel, 'search');
