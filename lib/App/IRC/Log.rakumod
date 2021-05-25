@@ -4,7 +4,7 @@ use Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>;
 use Cro::HTTP::Router:ver<0.8.5>;
 use Cro::WebApp::Template:ver<0.8.5>;
 use Cro::WebApp::Template::Repository:ver<0.8.5>;
-use IRC::Channel::Log:ver<0.0.25>:auth<cpan:ELIZABETH>;
+use IRC::Channel::Log:ver<0.0.27>:auth<cpan:ELIZABETH>;
 use JSON::Fast:ver<0.15>;
 use RandomColor;
 
@@ -640,6 +640,46 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
           !! render-template $crot, %params
     }
 
+    # Return content for targets helper
+    method !targets(
+      :$channel!,
+      :$targets!,
+      :$json,
+    ) {
+        my $crot := self!template-for($channel, 'targets');
+        get-template-repository.refresh($crot.absolute)
+          if $crot.modified > $!liftoff;
+        my $clog := self.clog($channel);
+
+        my str @targets = $targets.split(",");
+        my %params;
+        %params<channel> := $channel;
+        %params<targets> := @targets;
+
+        sub find-em() {
+            if $clog.entries(|%params) -> @found {
+                self!ready-entries-for-template(
+                  @found, $channel, $clog.colors, :short
+                )
+            }
+        }
+
+        my $then    := now;
+        my @entries  = find-em;
+        my $elapsed := ((now - $then) * 1000).Int;
+
+        %params =
+          channel => $channel,
+          targets => @targets,
+          elapsed => $elapsed,
+          entries => @entries,
+        ;
+
+        $json
+          ?? to-json(%params,:!pretty)
+          !! render-template $crot, %params
+    }
+
     # Return content for searches
     method !search(
       :$channel!,
@@ -1003,6 +1043,12 @@ dd %args;
             }
             get -> 'around.json', :%args {
                 content 'text/json', self!around(:json, |%args)
+            }
+            get -> 'targets.html', :%args {
+                content 'text/html', self!targets(|%args)
+            }
+            get -> 'targets.json', :%args {
+                content 'text/json', self!targets(:json, |%args)
             }
 
             get -> CHANNEL $channel {
