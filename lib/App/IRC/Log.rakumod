@@ -595,7 +595,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     # Return content for around target helper
     method !around(
       :$channel!,
-      :$around!,
+      :$target!,
       :$nr-entries,
       :$conversation,
       :$control,
@@ -608,7 +608,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
 
         my %params;
         %params<channel>       := $channel;
-        %params<around-target> := $around;
+        %params<around-target> := $target;
         %params<nr-entries>    := $nr-entries   if $nr-entries;
         %params<control>       := $control      if $control;
         %params<conversation>  := $conversation if $conversation;
@@ -626,11 +626,11 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
         my $elapsed := ((now - $then) * 1000).Int;
 
         .<is-target> := True
-          given @entries[@entries.first: *.<target> eq $around, :k];
+          given @entries[@entries.first: *.<target> eq $target, :k];
 
         %params =
           channel => $channel,
-          around  => $around,
+          target  => $target,
           elapsed => $elapsed,
           entries => @entries,
         ;
