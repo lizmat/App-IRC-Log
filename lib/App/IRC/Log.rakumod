@@ -302,7 +302,7 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     has IO()    $.zip-dir;                   # saving zipped renderings
     has Instant $.liftoff is built(:bind) = $*INIT-INSTANT;
 
-    has str @.channels = self!default-channels;
+    has str @.channels = self.default-channels;
     has     %!channels;
 
     has     &.htmlize is built(:bind) = &htmlize;
@@ -315,8 +315,11 @@ class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
     my constant $nick-colors-json = 'nicks.json';
 
     # Determine default channels from the logdir
-    method !default-channels() {
-        $!log-dir.dir.map({ 
+    multi method default-channels(App::IRC::Log:D:) {
+        self.default-channels($!log-dir)
+    }
+    multi method default-channels(App::IRC::Log: IO:D $log-dir) {
+        $log-dir.dir.map({ 
           .basename
           if .d
           && !.basename.starts-with('.')
@@ -1052,6 +1055,9 @@ dd %args;
             }
 
             get -> CHANNEL $channel {
+                redirect "/$channel/index.html", :permanent
+            }
+            get -> CHANNEL $channel, '' {
                 redirect "/$channel/index.html", :permanent
             }
             get -> CHANNEL $channel, 'index.html' {
