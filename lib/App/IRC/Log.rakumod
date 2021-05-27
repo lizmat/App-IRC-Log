@@ -4,7 +4,7 @@ use Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>;
 use Cro::HTTP::Router:ver<0.8.5>;
 use Cro::WebApp::Template:ver<0.8.5>;
 use Cro::WebApp::Template::Repository:ver<0.8.5>;
-use IRC::Channel::Log:ver<0.0.27>:auth<cpan:ELIZABETH>;
+use IRC::Channel::Log:ver<0.0.30>:auth<cpan:ELIZABETH>;
 use JSON::Fast:ver<0.15>;
 use RandomColor;
 
