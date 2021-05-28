@@ -5,3 +5,4 @@
 /state/
 *.gz
 /logs
+/1*
