@@ -2,5 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.2  2021-05-31T23:05:28+02:00
+    - Up dependencies in IRC::Channel::Log and JSON::Fast
+    - Make any static file lookup first look in static/channel dir
+
 0.0.1  2021-05-28T11:48:35+02:00
     - Initial version

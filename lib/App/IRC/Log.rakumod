@@ -4,8 +4,8 @@ use Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>;
 use Cro::HTTP::Router:ver<0.8.5>;
 use Cro::WebApp::Template:ver<0.8.5>;
 use Cro::WebApp::Template::Repository:ver<0.8.5>;
-use IRC::Channel::Log:ver<0.0.29>:auth<cpan:ELIZABETH>;
-use JSON::Fast:ver<0.15>;
+use IRC::Channel::Log:ver<0.0.30>:auth<cpan:ELIZABETH>;
+use JSON::Fast:ver<0.16>;
 use RandomColor;
 
 # Array for humanizing dates
@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.1>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.2>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -896,7 +896,7 @@ dd %args;
 dd "static";
                 serve-static self.html($channel, $file);
             }
-            get -> CHANNEL $channel, CSS $file {
+            get -> CHANNEL $channel, $file {
                 my $io := $!static-dir.add($channel).add($file);
                 serve-static $io.e ?? $io !! $!static-dir.add($file)
             }
