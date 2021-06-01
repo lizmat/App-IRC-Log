@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.2>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.3>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -893,12 +893,7 @@ dd %args;
                 serve-static self!day($channel, $file);
             }
             get -> CHANNEL $channel, HTML $file {
-dd "static";
                 serve-static self.html($channel, $file);
-            }
-            get -> CHANNEL $channel, $file {
-                my $io := $!static-dir.add($channel).add($file);
-                serve-static $io.e ?? $io !! $!static-dir.add($file)
             }
             get -> CHANNEL $channel, LOG $file {
                 my $io := $!log-dir
@@ -907,6 +902,10 @@ dd "static";
                   .add($file.chop(4));
 
                 serve-static $io
+            }
+            get -> CHANNEL $channel, $file {
+                my $io := $!static-dir.add($channel).add($file);
+                serve-static $io.e ?? $io !! $!static-dir.add($file)
             }
             get -> HTML $file {
                 serve-static self.html($file)
