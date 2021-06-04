@@ -4,7 +4,7 @@ use Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>;
 use Cro::HTTP::Router:ver<0.8.5>;
 use Cro::WebApp::Template:ver<0.8.5>;
 use Cro::WebApp::Template::Repository:ver<0.8.5>;
-use IRC::Channel::Log:ver<0.0.30>:auth<cpan:ELIZABETH>;
+use IRC::Channel::Log:ver<0.0.31>:auth<cpan:ELIZABETH>;
 use JSON::Fast:ver<0.16>;
 use RandomColor;
 
@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.3>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.4>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -111,15 +111,29 @@ class App::IRC::Log:ver<0.0.3>:auth<cpan:ELIZABETH> {
               |@problems).join: "\n  ";
         }
 
-        %!clogs{$_} := start {
+        %!clogs{$_} := start {  # start by storing the Promise
             my $clog := IRC::Channel::Log.new:
               logdir    => $!log-dir.add($_),
               class     => $!log-class,
               generator => &generator,
               state     => $!state-dir.add($_),
               name      => $_;
-            $clog.watch-and-update if $clog.active;
-            $clog;
+
+            # Monitor active channels for changes
+            if $clog.active {
+                my str $last-date = $clog.dates.tail;
+                my str $channel   = $clog.name;
+                my $home  := $!rendered-dir.add('home.html');
+                my $index := $!rendered-dir.add($channel).add('index.html');
+                $clog.watch-and-update: post-process => {
+                    if .date ne $last-date {
+                        .unlink for $index, $home;
+                        $last-date = .date.Str;
+                    }
+                }
+            }
+
+            $clog  # the result of the Promise
         } for @!channels;
     }
 
