@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.5  2021-06-04T22:14:40+02:00
+    - Initial support for /channel/live.html
+
 0.0.4  2021-06-04T14:51:25+02:00
     - Up dependency on IRC::Channel::Log
     - Invalidate home.html / index.html on the start of a new day

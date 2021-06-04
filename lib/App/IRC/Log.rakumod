@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.4>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.5>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -461,6 +461,73 @@ class App::IRC::Log:ver<0.0.4>:auth<cpan:ELIZABETH> {
           !! render-template $crot, %params
     }
 
+    # Return content for live channel view
+    method !live(
+      :$channel!,
+      :$control    = "",
+      :$entries-pp = 50,
+      :$json,      # return as JSON instead of HTML
+    --> Str:D) {
+        my $crot := self!template-for($channel, 'live');
+        get-template-repository.refresh($crot.absolute)
+          if $crot.modified > $!liftoff;
+        my $clog := self.clog($channel);
+
+        # Initial setup of parameters to clog.entries
+        my %params;
+        %params<conversation> := True unless $control;
+        %params<reverse>      := True;
+        %params<entries-pp>   := $entries-pp;
+
+        sub find-em() {
+            if $clog.entries(|%params).head($entries-pp) -> @found {
+                self!ready-entries-for-template(
+                  @found.reverse,
+                  $channel,
+                  $clog.colors,
+                  :short
+                )
+            }
+        }
+
+        my $then    := now;
+        my @entries  = find-em;
+        my $elapsed := ((now - $then) * 1000).Int;
+
+        # Run all the plugins
+        for @!day-plugins -> &plugin {
+            &plugin.returns ~~ Nil
+              ?? plugin(@entries)
+              !! (@entries = plugin(@entries))
+        }
+
+        my $first-date := @entries.head<date> // "";
+        my $last-date  := @entries.tail<date> // "";
+
+        %params =
+          control            => $control,
+          conversation       => !$control,
+          channel            => $channel,
+          channels           => @!channels,
+          days               => 1..31,
+          elapsed            => ((now - $then) * 1000).Int,
+          entries            => @entries,
+          entries-pp         => $entries-pp,
+          first-date         => $first-date,
+          first-human-date   => human-date($first-date),
+          first-target       => @entries.head<target> // "",
+          last-date          => $last-date,
+          last-human-date    => human-date($last-date),
+          last-target        => @entries.tail<target> // "",
+          name               => $channel,
+          nr-entries         => @entries.elems,
+        ;
+
+        $json
+          ?? to-json(%params,:!pretty)
+          !! render-template $crot, %params
+    }
+
     # Return content for searches
     method !search(
       :$channel!,
@@ -840,6 +907,11 @@ dd %args;
             }
             get -> CHANNEL $channel, 'index.html' {
                 serve-static self!index($channel)
+            }
+            get -> CHANNEL $channel, 'live.html', :%args {
+                content
+                  'text/html; charset=UTF-8',
+                  self!live(:$channel, |%args)
             }
             get -> CHANNEL $channel, 'search.html', :%args {
                 content
