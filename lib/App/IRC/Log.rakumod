@@ -4,7 +4,7 @@ use Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>;
 use Cro::HTTP::Router:ver<0.8.5>;
 use Cro::WebApp::Template:ver<0.8.5>;
 use Cro::WebApp::Template::Repository:ver<0.8.5>;
-use IRC::Channel::Log:ver<0.0.31>:auth<cpan:ELIZABETH>;
+use IRC::Channel::Log:ver<0.0.33>:auth<cpan:ELIZABETH>;
 use JSON::Fast:ver<0.16>;
 use RandomColor;
 
@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.5>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.6>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -461,10 +461,130 @@ class App::IRC::Log:ver<0.0.5>:auth<cpan:ELIZABETH> {
           !! render-template $crot, %params
     }
 
+    # Return until target and mark entries to replace on update
+    sub scroll-up(@entries) {
+        if @entries {
+            @entries[0]<up-removable> := True;
+            my int $i = 0;
+            @entries[$i]<up-removable> := True
+              while @entries[++$i]<sender> eq '"';
+            @entries[$i - 1]<target>
+        }
+        else {
+            ""
+        }
+    }
+
+    # Return from target and number of entries to replace on update
+    # (so that a no-op can be detected) on a scroll-down
+    sub scroll-down(@entries) {
+        if @entries.elems -> int $elems {
+            if @entries.tail<sender> eq '"' {
+                my int $i = $elems;
+                @entries[$i]<down-removable> := True
+                  while @entries[--$i]<sender> eq '"';
+                given @entries[$i] -> \entry {
+                    entry<down-removable> := True;
+                    entry<target>, $elems - $i
+                }
+            }
+            elsif @entries.tail -> \entry {
+                entry<down-removable> := True;
+                entry<target>, 1
+            }
+        }
+        else {
+            "", 0
+        }
+    }
+
+    # Return content for scroll-up entries
+    method !scroll-up(
+       $channel,
+      :$target!,
+      :$json,      # return as JSON instead of HTML
+    --> Str:D) {
+        my $crot := self!template-for($channel, 'additional');
+        get-template-repository.refresh($crot.absolute)
+          if $crot.modified > $!liftoff;
+        my $clog := self.clog($channel);
+
+        # Get any additional entries 
+        my @entries = self!ready-entries-for-template(
+          $clog.entries(:conversation, :until-target($target)).head(10).reverse,
+          $channel, $clog.colors, :short
+        );
+
+        # Run all the plugins
+        for @!day-plugins -> &plugin {
+            &plugin.returns ~~ Nil
+              ?? plugin(@entries)
+              !! (@entries = plugin(@entries))
+        }
+
+        # Nothing before
+        unless @entries {
+            response.status = 204;
+            return "";
+        }
+
+        my %params = :$channel, :@entries, :up-target(scroll-up(@entries));
+
+        $json
+          ?? to-json(%params, :!pretty)
+          !! render-template $crot, %params
+    }
+
+    # Return content for scroll-down entries
+    method !scroll-down(
+       $channel,
+      :$target!,
+      :$current-entries!,
+      :$json,      # return as JSON instead of HTML
+    --> Str:D) {
+        my $crot := self!template-for($channel, 'additional');
+        get-template-repository.refresh($crot.absolute)
+          if $crot.modified > $!liftoff;
+        my $clog := self.clog($channel);
+
+        # Get any additional entries 
+        my @entries = $clog.entries(:conversation, :from-target($target));
+        my str $prev-date;
+        $prev-date = .date.Str with @entries.head.prev;
+
+        @entries = self!ready-entries-for-template(
+          @entries, $channel, $clog.colors, :short
+        );
+
+        # Make sure we don't start with a Date header if still same date
+        with $prev-date && @entries.head -> \entry {
+            entry<human-date> = "" if entry<date> eq $prev-date;
+        }
+
+        # Run all the plugins
+        for @!day-plugins -> &plugin {
+            &plugin.returns ~~ Nil
+              ?? plugin(@entries)
+              !! (@entries = plugin(@entries))
+        }
+
+        # Nothing after (yet)
+        if @entries == $current-entries {
+            response.status = 204;
+            return "";
+        }
+
+        my ($down-target, $down-entries) = scroll-down(@entries);
+        my %params = :$channel, :@entries, :$down-entries, :$down-target;
+
+        $json
+          ?? to-json(%params, :!pretty)
+          !! render-template $crot, %params
+    }
+
     # Return content for live channel view
     method !live(
-      :$channel!,
-      :$control    = "",
+       $channel,
       :$entries-pp = 50,
       :$json,      # return as JSON instead of HTML
     --> Str:D) {
@@ -473,14 +593,10 @@ class App::IRC::Log:ver<0.0.5>:auth<cpan:ELIZABETH> {
           if $crot.modified > $!liftoff;
         my $clog := self.clog($channel);
 
-        # Initial setup of parameters to clog.entries
-        my %params;
-        %params<conversation> := True unless $control;
-        %params<reverse>      := True;
-        %params<entries-pp>   := $entries-pp;
-
         sub find-em() {
-            if $clog.entries(|%params).head($entries-pp) -> @found {
+            if $clog.entries(
+              :conversation, :reverse
+            ).head($entries-pp) -> @found {
                 self!ready-entries-for-template(
                   @found.reverse,
                   $channel,
@@ -501,26 +617,19 @@ class App::IRC::Log:ver<0.0.5>:auth<cpan:ELIZABETH> {
               !! (@entries = plugin(@entries))
         }
 
-        my $first-date := @entries.head<date> // "";
-        my $last-date  := @entries.tail<date> // "";
-
-        %params =
-          control            => $control,
-          conversation       => !$control,
-          channel            => $channel,
-          channels           => @!channels,
-          days               => 1..31,
-          elapsed            => ((now - $then) * 1000).Int,
-          entries            => @entries,
-          entries-pp         => $entries-pp,
-          first-date         => $first-date,
-          first-human-date   => human-date($first-date),
-          first-target       => @entries.head<target> // "",
-          last-date          => $last-date,
-          last-human-date    => human-date($last-date),
-          last-target        => @entries.tail<target> // "",
-          name               => $channel,
-          nr-entries         => @entries.elems,
+        my ($down-target, $down-entries) = scroll-down(@entries);
+        my %params =
+          channel             => $channel,
+          channels            => @!channels,
+          down-entries        => $down-entries,
+          down-target         => $down-target,
+          elapsed             => ((now - $then) * 1000).Int,
+          entries             => @entries,
+          entries-pp          => $entries-pp,
+          first-target        => @entries.head<target> // "",
+          last-target         => @entries.tail<target> // "",
+          nr-entries          => @entries.elems,
+          up-target           => scroll-up(@entries),
         ;
 
         $json
@@ -530,7 +639,7 @@ class App::IRC::Log:ver<0.0.5>:auth<cpan:ELIZABETH> {
 
     # Return content for searches
     method !search(
-      :$channel!,
+       $channel,
       :$nicks        = "",
       :$entries-pp   = 25,
       :$type         = "words",
@@ -700,7 +809,7 @@ class App::IRC::Log:ver<0.0.5>:auth<cpan:ELIZABETH> {
         ;
 
         $json
-          ?? to-json(%params,:!pretty)
+          ?? to-json(%params, :!pretty)
           !! render-template $crot, %params
     }
 
@@ -879,24 +988,35 @@ class App::IRC::Log:ver<0.0.5>:auth<cpan:ELIZABETH> {
             get -> 'home.html' {
                 serve-static self!home
             }
-            get -> 'search.html', :%args {
-dd %args;
-                content 'text/html', self!search(|%args)
+            get -> 'search.html', :$channel, :%args {
+                content
+                  'text/html; charset=UTF-8',
+                  self!search($channel, |%args)
             }
-            get -> 'search.json', :%args {
-                content 'text/json', self!search(:json, |%args)
+            get -> 'search.json', :$channel, :%args {
+                content 
+                  'text/json; charset=UTF-8',
+                  self!search($channel, :json, |%args)
             }
             get -> 'around.html', :%args {
-                content 'text/html', self!around(|%args)
+                content
+                  'text/html; charset=UTF-8',
+                  self!around(|%args)
             }
             get -> 'around.json', :%args {
-                content 'text/json', self!around(:json, |%args)
+                content
+                  'text/json; charset=UTF-8',
+                  self!around(:json, |%args)
             }
             get -> 'targets.html', :%args {
-                content 'text/html', self!targets(|%args)
+                content
+                  'text/html; charset=UTF-8',
+                  self!targets(|%args)
             }
             get -> 'targets.json', :%args {
-                content 'text/json', self!targets(:json, |%args)
+                content
+                  'text/json; charset=UTF-8',
+                  self!targets(:json, |%args)
             }
 
             get -> CHANNEL $channel {
@@ -908,15 +1028,44 @@ dd %args;
             get -> CHANNEL $channel, 'index.html' {
                 serve-static self!index($channel)
             }
+
             get -> CHANNEL $channel, 'live.html', :%args {
                 content
                   'text/html; charset=UTF-8',
-                  self!live(:$channel, |%args)
+                  self!live($channel, |%args)
             }
+            get -> CHANNEL $channel, 'live.json', :%args {
+                content
+                  'text/json; charset=UTF-8',
+                  self!live($channel, :json, |%args)
+            }
+
+            get -> CHANNEL $channel, 'scroll-down.html', :%args {
+                content
+                  'text/html; charset=UTF-8',
+                  self!scroll-down($channel, |%args)
+            }
+            get -> CHANNEL $channel, 'scroll-down.json', :%args {
+                content
+                  'text/json; charset=UTF-8',
+                  self!scroll-down($channel, :json, |%args)
+            }
+
+            get -> CHANNEL $channel, 'scroll-up.html', :%args {
+                content
+                  'text/html; charset=UTF-8',
+                  self!scroll-up($channel, |%args)
+            }
+            get -> CHANNEL $channel, 'scroll-up.json', :%args {
+                content
+                  'text/json; charset=UTF-8',
+                  self!scroll-up($channel, :json, |%args)
+            }
+
             get -> CHANNEL $channel, 'search.html', :%args {
                 content
                   'text/html; charset=UTF-8',
-                  self!search(:$channel, |%args)
+                  self!search($channel, |%args)
             }
 
             get -> CHANNEL $channel, 'today' {
