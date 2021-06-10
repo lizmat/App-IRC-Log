@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.6>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.7>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -175,19 +175,10 @@ class App::IRC::Log:ver<0.0.6>:auth<cpan:ELIZABETH> {
             my str $hhmm = .hh-mm;
             my str $nick = .sender;
             my int $type = .control.Int;
-            my $hash := Hash.new((
+            my %hash =
               channel         => $channel,
-              control         => .control,
-              conversation    => .conversation,
               date            => $date,
-              hh-mm           => $hhmm eq $last-hhmm
-                                   && $type == $last-type
-                                   ?? ""
-                                   !! $hhmm,
               hour            => .hour,
-              human-date      => $date eq $last-date
-                                   ?? ""
-                                   !! human-date($date, "\xa0", :$short),
               message         => &!htmlize($_, %colors),
               nick            => $nick,
               minute          => .minute,
@@ -197,12 +188,19 @@ class App::IRC::Log:ver<0.0.6>:auth<cpan:ELIZABETH> {
                                    ?? '"'
                                    !! &!colorize-nick($nick, %colors),
               target          => .target
-            ));
+            ;
+            %hash<control>      := True if .control;
+            %hash<conversation> := True if .conversation;
+            %hash<hh-mm> := $hhmm
+              unless $hhmm eq $last-hhmm && $type == $last-type;
+            %hash<human-date>    = human-date($date, "\xa0", :$short)
+              unless $date eq $last-date;
+
             $last-date = $date;
             $last-hhmm = $hhmm;
             $last-nick = $nick;
             $last-type = $type;
-            $hash
+            %hash
         }
     }
 
@@ -557,7 +555,7 @@ class App::IRC::Log:ver<0.0.6>:auth<cpan:ELIZABETH> {
         );
 
         # Make sure we don't start with a Date header if still same date
-        with $prev-date && @entries.head -> \entry {
+        if $prev-date && @entries.head -> \entry {
             entry<human-date> = "" if entry<date> eq $prev-date;
         }
 
