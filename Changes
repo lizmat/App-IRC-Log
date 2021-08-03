@@ -2,6 +2,10 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.8  2021-08-03T14:56:50+02:00
+    - Add additiuonal info for calendars (Oleksander++)
+    - Add pages.md for a bit of background info
+
 0.0.7  2021-06-10T11:40:59+02:00
     - Fix issue in scroll-down functionality
     - Rework entry preparation to exclude conditional fields
