@@ -222,6 +222,7 @@ class App::IRC::Log:ver<0.0.7>:auth<cpan:ELIZABETH> {
 
             # Set up entries for use in template
             my $clog := self.clog($channel);
+            my @dates  = $clog.dates;
             my @entries = self!ready-entries-for-template(
               $clog.log($date).entries,
               $channel,
@@ -253,6 +254,8 @@ class App::IRC::Log:ver<0.0.7>:auth<cpan:ELIZABETH> {
                 ?? 'this/' ~ Date.new($Date.year - 1, 1, 1)
                 !! $date.substr(0,4)
               ),
+              :first-date(@dates.head),
+              :last-date(@dates.tail),
               :@entries
             }
         }
@@ -328,12 +331,9 @@ class App::IRC::Log:ver<0.0.7>:auth<cpan:ELIZABETH> {
             my @years  = %years.sort(*.key).reverse.map: {
                 Map.new((
                   channel => $channel,
-                  year    => .key,
-                  months  => .value.sort(*.key).map: {
-                     Map.new((
-                        month       => .key,
-                        human-month => @human-months[.key.substr(5,2)],
-                        dates       => .value.map( -> $date {
+                  year    => $_.key,
+                  months  => $_.value.sort(*.key).map: {
+                      my $dates = $_.value.map( -> $date {
                             my $log := $clog.log($date);
                             Map.new((
                               control      => $log.nr-control-entries,
@@ -341,7 +341,13 @@ class App::IRC::Log:ver<0.0.7>:auth<cpan:ELIZABETH> {
                               day          => $date.substr(8,2).Int,
                               date         => $date,
                             ))
-                        }).List
+                        }).Array;
+                      $dates.prepend((Map.new(( empty => True, day => $_ )) for (1 ..^ $_.value[0].substr(8,2).Int)));
+                      $dates.append((Map.new(( empty => True, day => $_ )) for ($_.value[* - 1].substr(8,2).Int ^.. 31)));
+                     Map.new((
+                        month       => $_.key,
+                        human-month => @human-months[$_.key.substr(5,2)],
+                        dates       => $dates
                      ))
                   },
                 ))
