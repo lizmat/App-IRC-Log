@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.8>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.9>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -184,11 +184,10 @@ class App::IRC::Log:ver<0.0.8>:auth<cpan:ELIZABETH> {
               minute          => .minute,
               ordinal         => .ordinal,
               relative-target => .target.substr(11),
-              sender          => $nick && $nick eq $last-nick
-                                   ?? '"'
-                                   !! &!colorize-nick($nick, %colors),
+              sender          => &!colorize-nick($nick, %colors),
               target          => .target
             ;
+            %hash<same-sender>  := True if $nick && $nick eq $last-nick;
             %hash<control>      := True if .control;
             %hash<conversation> := True if .conversation;
             %hash<hh-mm> := $hhmm
@@ -471,7 +470,7 @@ class App::IRC::Log:ver<0.0.8>:auth<cpan:ELIZABETH> {
             @entries[0]<up-removable> := True;
             my int $i = 0;
             @entries[$i]<up-removable> := True
-              while @entries[++$i]<sender> eq '"';
+              while @entries[++$i]<same-sender>;
             @entries[$i - 1]<target>
         }
         else {
@@ -483,10 +482,10 @@ class App::IRC::Log:ver<0.0.8>:auth<cpan:ELIZABETH> {
     # (so that a no-op can be detected) on a scroll-down
     sub scroll-down(@entries) {
         if @entries.elems -> int $elems {
-            if @entries.tail<sender> eq '"' {
+            if @entries.tail<same-sender> {
                 my int $i = $elems;
                 @entries[$i]<down-removable> := True
-                  while @entries[--$i]<sender> eq '"';
+                  while @entries[--$i]<same-sender>;
                 given @entries[$i] -> \entry {
                     entry<down-removable> := True;
                     entry<target>, $elems - $i
