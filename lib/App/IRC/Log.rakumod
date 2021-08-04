@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.9>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.10>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -173,7 +173,7 @@ class App::IRC::Log:ver<0.0.9>:auth<cpan:ELIZABETH> {
         entries.map: {
             my str $date = .date.Str;
             my str $hhmm = .hh-mm;
-            my str $nick = .sender;
+            my str $nick = .nick;
             my int $type = .control.Int;
             my %hash =
               channel         => $channel,
@@ -187,9 +187,12 @@ class App::IRC::Log:ver<0.0.9>:auth<cpan:ELIZABETH> {
               sender          => &!colorize-nick($nick, %colors),
               target          => .target
             ;
-            %hash<same-sender>  := True if $nick && $nick eq $last-nick;
+            %hash<same-nick>    := True if $nick && $nick eq $last-nick;
             %hash<control>      := True if .control;
-            %hash<conversation> := True if .conversation;
+            if .conversation {
+                %hash<conversation>   := True;
+                %hash<self-reference> := True unless .sender;
+            }
             %hash<hh-mm> := $hhmm
               unless $hhmm eq $last-hhmm && $type == $last-type;
             %hash<human-date>    = human-date($date, "\xa0", :$short)
