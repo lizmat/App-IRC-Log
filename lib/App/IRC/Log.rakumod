@@ -1,9 +1,9 @@
 use v6.*;
 
 use Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>;
-use Cro::HTTP::Router:ver<0.8.5>;
-use Cro::WebApp::Template:ver<0.8.5>;
-use Cro::WebApp::Template::Repository:ver<0.8.5>;
+use Cro::HTTP::Router:ver<0.8.6>;
+use Cro::WebApp::Template:ver<0.8.6>;
+use Cro::WebApp::Template::Repository:ver<0.8.6>;
 use IRC::Channel::Log:ver<0.0.33>:auth<cpan:ELIZABETH>;
 use JSON::Fast:ver<0.16>;
 use RandomColor;
@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.10>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.11>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
