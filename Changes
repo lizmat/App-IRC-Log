@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.12  2021-08-13T15:17:37+02:00
+    - Make sure nick is shown after control message by same nick
+
 0.0.11  2021-08-07T12:51:05+02:00
     - Up dependency on Cro to 0.8.6.
 

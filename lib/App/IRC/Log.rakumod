@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.11>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.12>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -200,7 +200,7 @@ class App::IRC::Log:ver<0.0.11>:auth<cpan:ELIZABETH> {
 
             $last-date = $date;
             $last-hhmm = $hhmm;
-            $last-nick = $nick;
+            $last-nick = $type ?? "" !! $nick;
             $last-type = $type;
             %hash
         }
