@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.14  2021-08-18T15:07:52+02:00
+    - make gist.html endpoint use the 'gist' template
+
 0.0.13  2021-08-18T13:00:22+02:00
     - Move handling of /targets.html to /channel/gist.html
 

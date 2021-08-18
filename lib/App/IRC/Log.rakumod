@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.13>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.14>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -427,13 +427,13 @@ class App::IRC::Log:ver<0.0.13>:auth<cpan:ELIZABETH> {
           !! render-template $crot, %params
     }
 
-    # Return content for targets helper
-    method !targets(
+    # Return content for gist helper
+    method !gist(
        $channel,
        $targets?,
       :$json,
     ) {
-        my $crot := self!template-for($channel, 'targets');
+        my $crot := self!template-for($channel, 'gist');
         get-template-repository.refresh($crot.absolute)
           if $crot.modified > $!liftoff;
         my $clog := self.clog($channel);
@@ -1039,12 +1039,12 @@ class App::IRC::Log:ver<0.0.13>:auth<cpan:ELIZABETH> {
             get -> CHANNEL $channel, 'gist.html', :%args {
                 content
                   'text/html; charset=UTF-8',
-                  self!targets($channel, %args.keys.first)         # XXX
+                  self!gist($channel, %args.keys.first)         # XXX
             }
             get -> CHANNEL $channel, 'gist.json', :%args {
                 content
                   'text/json; charset=UTF-8',
-                  self!targets($channel, %args.keys.first, :json)  # XXX
+                  self!gist($channel, %args.keys.first, :json)  # XXX
             }
 
             get -> CHANNEL $channel, 'scroll-down.html', :%args {
