@@ -96,7 +96,7 @@ return a 204 status (no change).
 
 Returns JSON if the extension is .json.
 
-## /channel/targets.html
+## /channel/gist.html
 
 A page for displaying the messages given by the targets.  The intent is to
 be able to provide a link to the actual significant parts of a discussion,
