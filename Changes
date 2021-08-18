@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.13  2021-08-18T13:00:22+02:00
+    - Move handling of /targets.html to /channel/gist.html
+
 0.0.12  2021-08-13T15:17:37+02:00
     - Make sure nick is shown after control message by same nick
 

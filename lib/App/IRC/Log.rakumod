@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.12>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.13>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -429,8 +429,8 @@ class App::IRC::Log:ver<0.0.12>:auth<cpan:ELIZABETH> {
 
     # Return content for targets helper
     method !targets(
-      :$channel!,
-      :$targets!,
+       $channel,
+       $targets?,
       :$json,
     ) {
         my $crot := self!template-for($channel, 'targets');
@@ -1014,16 +1014,6 @@ class App::IRC::Log:ver<0.0.12>:auth<cpan:ELIZABETH> {
                   'text/json; charset=UTF-8',
                   self!around(:json, |%args)
             }
-            get -> 'targets.html', :%args {
-                content
-                  'text/html; charset=UTF-8',
-                  self!targets(|%args)
-            }
-            get -> 'targets.json', :%args {
-                content
-                  'text/json; charset=UTF-8',
-                  self!targets(:json, |%args)
-            }
 
             get -> CHANNEL $channel {
                 redirect "/$channel/index.html", :permanent
@@ -1044,6 +1034,17 @@ class App::IRC::Log:ver<0.0.12>:auth<cpan:ELIZABETH> {
                 content
                   'text/json; charset=UTF-8',
                   self!live($channel, :json, |%args)
+            }
+
+            get -> CHANNEL $channel, 'gist.html', :%args {
+                content
+                  'text/html; charset=UTF-8',
+                  self!targets($channel, %args.keys.first)         # XXX
+            }
+            get -> CHANNEL $channel, 'gist.json', :%args {
+                content
+                  'text/json; charset=UTF-8',
+                  self!targets($channel, %args.keys.first, :json)  # XXX
             }
 
             get -> CHANNEL $channel, 'scroll-down.html', :%args {
