@@ -2,6 +2,11 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.15  2021-08-20T18:16:08+02:00
+    - Up dependency on IRC::Channel::Log to get .initial-topic
+    - Add support for initial-topic on day
+    - Add available channels to live
+
 0.0.14  2021-08-18T15:07:52+02:00
     - make gist.html endpoint use the 'gist' template
 

@@ -4,7 +4,7 @@ use Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>;
 use Cro::HTTP::Router:ver<0.8.6>;
 use Cro::WebApp::Template:ver<0.8.6>;
 use Cro::WebApp::Template::Repository:ver<0.8.6>;
-use IRC::Channel::Log:ver<0.0.33>:auth<cpan:ELIZABETH>;
+use IRC::Channel::Log:ver<0.0.34>:auth<cpan:ELIZABETH>;
 use JSON::Fast:ver<0.16>;
 use RandomColor;
 
@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.14>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.15>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -223,12 +223,11 @@ class App::IRC::Log:ver<0.0.14>:auth<cpan:ELIZABETH> {
         {
 
             # Set up entries for use in template
-            my $clog := self.clog($channel);
-            my @dates  = $clog.dates;
+            my $clog   := self.clog($channel);
+            my @dates   = $clog.dates;
+            my %colors := $clog.colors;
             my @entries = self!ready-entries-for-template(
-              $clog.log($date).entries,
-              $channel,
-              $clog.colors
+              $clog.log($date).entries, $channel, %colors
             );
 
             # Run all the plugins
@@ -238,8 +237,8 @@ class App::IRC::Log:ver<0.0.14>:auth<cpan:ELIZABETH> {
                   !! (@entries = plugin(@entries))
             }
 
-            # Render it!
-            self!render: $!rendered-dir, $html, $crot, {
+            # Set up parameters
+            my %params =
               :$channel,
               :@!channels,
               :$date,
@@ -259,7 +258,26 @@ class App::IRC::Log:ver<0.0.14>:auth<cpan:ELIZABETH> {
               :first-date(@dates.head),
               :last-date(@dates.tail),
               :@entries
+            ;
+
+            # Add topic related parameters if any
+            with $clog.initial-topic($date) -> $topic {
+                %params<initial-topic-text> :=
+                  &!htmlize($topic, %colors);
+                %params<initial-topic-nick> :=
+                  &!colorize-nick($topic.nick, %colors);
+                %params<initial-topic-date> :=
+                  $topic.date.Str;
+                %params<initial-topic-human-date> :=
+                  human-date($topic.date.Str);
+                %params<initial-topic-relative-target> :=
+                  $topic.target.substr(11);
+                %params<initial-topic-target> :=
+                  $topic.target;
             }
+
+            # Render it!
+            self!render: $!rendered-dir, $html, $crot, %params;
         }
         $html
     }
@@ -456,10 +474,11 @@ class App::IRC::Log:ver<0.0.14>:auth<cpan:ELIZABETH> {
         my $elapsed := ((now - $then) * 1000).Int;
 
         %params =
-          channel => $channel,
-          targets => @targets,
-          elapsed => $elapsed,
-          entries => @entries,
+          channel  => $channel,
+          channels => @!channels,
+          targets  => @targets,
+          elapsed  => $elapsed,
+          entries  => @entries,
         ;
 
         $json
