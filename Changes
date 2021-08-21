@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.16  2021-08-21T11:35:46+02:00
+    - Fix incorrect dependency in META
+
 0.0.15  2021-08-20T18:16:08+02:00
     - Up dependency on IRC::Channel::Log to get .initial-topic
     - Add support for initial-topic on day
