@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.17  2021-08-22T01:01:12+02:00
+    - Make sure all pages have first/last/start/end-date
+
 0.0.16  2021-08-21T11:35:46+02:00
     - Fix incorrect dependency in META
 

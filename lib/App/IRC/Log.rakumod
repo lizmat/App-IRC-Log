@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.17>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -83,7 +83,7 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
         self.default-channels($!log-dir)
     }
     multi method default-channels(App::IRC::Log: IO:D $log-dir) {
-        $log-dir.dir.map({ 
+        $log-dir.dir.map({
           .basename
           if .d
           && !.basename.starts-with('.')
@@ -224,7 +224,7 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
 
             # Set up entries for use in template
             my $clog   := self.clog($channel);
-            my @dates   = $clog.dates;
+            my @dates  := $clog.dates;
             my %colors := $clog.colors;
             my @entries = self!ready-entries-for-template(
               $clog.log($date).entries, $channel, %colors
@@ -255,6 +255,8 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
                 ?? 'this/' ~ Date.new($Date.year - 1, 1, 1)
                 !! $date.substr(0,4)
               ),
+              :start-date($date),
+              :end-date($date),
               :first-date(@dates.head),
               :last-date(@dates.tail),
               :@entries
@@ -293,7 +295,7 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
         {
             my @channels = @!channels.map: -> $channel {
                 my $clog  := self.clog($channel);
-                my @dates  = $clog.dates;
+                my @dates := $clog.dates;
                 my %months = @dates.categorize: *.substr(0,7);
                 my %years  = %months.categorize: *.key.substr(0,4);
                 my @years  = %years.sort(*.key).map: {
@@ -310,13 +312,19 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
                       },
                     ))
                 }
+
+                my $first-date := @dates.head;
+                my $last-date  := @dates.tail;
+
                 Map.new((
                   name             => $channel,
                   years            => @years,
-                  first-date       => @dates.head,
-                  first-human-date => human-date(@dates.head),
-                  last-date        => @dates.tail,
-                  last-human-date  => human-date(@dates.tail),
+                  start-date       => $last-date,
+                  end-date         => $last-date,
+                  first-date       => $first-date,
+                  first-human-date => human-date($first-date),
+                  last-date        => $last-date,
+                  last-human-date  => human-date($last-date),
                 ))
             }
 
@@ -345,13 +353,16 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
                             | $crot.modified  # or template changed
         {
             my $clog  := self.clog($channel);
-            my @dates  = $clog.dates;
+            my @dates := $clog.dates;
             my %months = @dates.categorize: *.substr(0,7);
             my %years  = %months.categorize: *.key.substr(0,4);
             my @years  = %years.sort(*.key).reverse.map: {
                 Map.new((
-                  channel => $channel,
-                  year    => $_.key,
+                  channel    => $channel,
+                  year       => $_.key,
+                  date       => @dates.tail,
+                  first-date => @dates.head,
+                  last-date  => @dates.tail,
                   months  => $_.value.sort(*.key).map: {
                       my $dates = $_.value.map( -> $date {
                             my $log := $clog.log($date);
@@ -373,14 +384,20 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
                 ))
             }
 
+            my $first-date := @dates.head;
+            my $last-date  := @dates.tail;
             self!render: $!rendered-dir, $html, $crot, {
               name             => $channel,
               channels         => @!channels,
               years            => @years,
-              first-date       => @dates.head,
-              first-human-date => human-date(@dates.head),
-              last-date        => @dates.tail,
-              last-human-date  => human-date(@dates.tail),
+              date             => $last-date,
+              start-date       => $last-date,
+              end-date         => $last-date,
+              human-date       => human-date($last-date),
+              first-date       => $first-date,
+              first-human-date => human-date($first-date),
+              last-date        => $last-date,
+              last-human-date  => human-date($last-date),
             }
         }
         $html
@@ -434,10 +451,12 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
           given @entries[@entries.first: *.<target> eq $target, :k];
 
         %params =
-          channel => $channel,
-          target  => $target,
-          elapsed => $elapsed,
-          entries => @entries,
+          channel  => $channel,
+          channels => @!channels,
+          dates    => $clog.dates,
+          target   => $target,
+          elapsed  => $elapsed,
+          entries  => @entries,
         ;
 
         $json
@@ -454,7 +473,8 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
         my $crot := self!template-for($channel, 'gist');
         get-template-repository.refresh($crot.absolute)
           if $crot.modified > $!liftoff;
-        my $clog := self.clog($channel);
+        my $clog  := self.clog($channel);
+        my @dates := $clog.dates;
 
         my str @targets = $targets.split(",");
         my %params;
@@ -474,12 +494,19 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
         my $elapsed := ((now - $then) * 1000).Int;
 
         %params =
-          channel  => $channel,
-          channels => @!channels,
-          targets  => @targets,
-          elapsed  => $elapsed,
-          entries  => @entries,
+          channel    => $channel,
+          channels   => @!channels,
+          first-date => @dates.head,
+          last-date  => @dates.tail,
+          targets    => @targets,
+          elapsed    => $elapsed,
+          entries    => @entries,
         ;
+
+        if @entries {
+            %params<start-date> := @entries.head<date>;
+            %params<end-date>   := @entries.tail<date>;
+        }
 
         $json
           ?? to-json(%params,:!pretty)
@@ -534,7 +561,7 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
           if $crot.modified > $!liftoff;
         my $clog := self.clog($channel);
 
-        # Get any additional entries 
+        # Get any additional entries
         my @entries = self!ready-entries-for-template(
           $clog.entries(:conversation, :until-target($target)).head(10).reverse,
           $channel, $clog.colors, :short
@@ -572,7 +599,7 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
           if $crot.modified > $!liftoff;
         my $clog := self.clog($channel);
 
-        # Get any additional entries 
+        # Get any additional entries
         my @entries = $clog.entries(:conversation, :from-target($target));
         my str $prev-date;
         $prev-date = .date.Str with @entries.head.prev;
@@ -642,10 +669,16 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
               !! (@entries = plugin(@entries))
         }
 
+        my @dates := $clog.dates;
         my ($down-target, $down-entries) = scroll-down(@entries);
         my %params =
           channel             => $channel,
           channels            => @!channels,
+          date                => @dates.tail,
+          start-date          => @entries.head<date> // "",
+          end-date            => @entries.tail<date> // "",
+          first-date          => @dates.head,
+          last-date           => @dates.tail,
           down-entries        => $down-entries,
           down-target         => $down-target,
           elapsed             => ((now - $then) * 1000).Int,
@@ -750,7 +783,7 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
                 }
             }
         }
-        
+
         if $query && $query.words -> @words {
             if $type eq "words" | "contains" | "starts-with" {
                 %params{$type} := @words;
@@ -794,14 +827,17 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
           control            => $message-type eq "control",
           conversation       => $message-type eq "conversation",
           channels           => @!channels,
+          dates              => $clog.dates,
           days               => 1..31,
           elapsed            => ((now - $then) * 1000).Int,
           entries            => @entries,
           entries-pp         => $entries-pp,
           entries-pp-options => <25 50 100 250 500>,
+          start-date         => (@entries ?? @entries.head<date> !! ""),
+          end-date           => (@entries ?? @entries.tail<date> !! ""),
           first-date         => $first-date,
           first-human-date   => human-date($first-date),
-          first-target       => @entries.head<target> // "",
+          first-target       => (@entries ?? @entries.head<target> !! ""),
           from-day           => $from-day,
           from-month         => $from-month,
           from-year          => $from-year || @years.head,
@@ -809,7 +845,7 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
           include-aliases    => $include-aliases,
           last-date          => $last-date,
           last-human-date    => human-date($last-date),
-          last-target        => @entries.tail<target> // "",
+          last-target        => (@entries ?? @entries.tail<target> !! ""),
           message-options    => (""           => "all messages",
                                  conversation => "text only",
                                  control      => "control only",
@@ -1019,7 +1055,7 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
                   self!search($channel, |%args)
             }
             get -> 'search.json', :$channel, :%args {
-                content 
+                content
                   'text/json; charset=UTF-8',
                   self!search($channel, :json, |%args)
             }
@@ -1116,13 +1152,13 @@ class App::IRC::Log:ver<0.0.16>:auth<cpan:ELIZABETH> {
             }
 
             get -> CHANNEL $channel, YEAR $year {
-                my @dates = self.clog($channel).dates;
+                my @dates := self.clog($channel).dates;
                 redirect "/$channel/"
                   ~ (@dates[finds @dates, $year] || @dates.tail)
                   ~ '.html';
             }
             get -> CHANNEL $channel, MONTH $month {
-                my @dates = self.clog($channel).dates;
+                my @dates := self.clog($channel).dates;
                 redirect "/$channel/"
                   ~ (@dates[finds @dates, $month] || @dates.tail)
                   ~ '.html';
