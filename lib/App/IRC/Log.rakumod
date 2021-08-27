@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.17>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.18>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -172,7 +172,7 @@ class App::IRC::Log:ver<0.0.17>:auth<cpan:ELIZABETH> {
         my int $last-type = -1;
         entries.map: {
             my str $date = .date.Str;
-            my str $hhmm = .hh-mm;
+            my str $hhmm = .hh-mm // "";
             my str $nick = .nick;
             my int $type = .control.Int;
             my %hash =
@@ -195,7 +195,7 @@ class App::IRC::Log:ver<0.0.17>:auth<cpan:ELIZABETH> {
             }
             %hash<hh-mm> := $hhmm
               unless $hhmm eq $last-hhmm && $type == $last-type;
-            %hash<human-date>    = human-date($date, "\xa0", :$short)
+            %hash<human-date> := human-date($date, "\xa0", :$short)
               unless $date eq $last-date;
 
             $last-date = $date;
@@ -826,6 +826,7 @@ class App::IRC::Log:ver<0.0.17>:auth<cpan:ELIZABETH> {
           all                => $all,
           control            => $message-type eq "control",
           conversation       => $message-type eq "conversation",
+          channel            => $channel,
           channels           => @!channels,
           dates              => $clog.dates,
           days               => 1..31,
