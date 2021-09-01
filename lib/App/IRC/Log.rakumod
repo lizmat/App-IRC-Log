@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.18>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.19>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -610,7 +610,7 @@ class App::IRC::Log:ver<0.0.18>:auth<cpan:ELIZABETH> {
 
         # Make sure we don't start with a Date header if still same date
         if $prev-date && @entries.head -> \entry {
-            entry<human-date> = "" if entry<date> eq $prev-date;
+            entry<human-date> := "" if entry<date> eq $prev-date;
         }
 
         # Run all the plugins
