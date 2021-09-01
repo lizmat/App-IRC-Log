@@ -1051,24 +1051,16 @@ class App::IRC::Log:ver<0.0.18>:auth<cpan:ELIZABETH> {
                 serve-static self!home
             }
             get -> 'search.html', :$channel, :%args {
-                content
-                  'text/html; charset=UTF-8',
-                  self!search($channel, |%args)
+                content 'text/html', self!search($channel, |%args)
             }
             get -> 'search.json', :$channel, :%args {
-                content
-                  'text/json; charset=UTF-8',
-                  self!search($channel, :json, |%args)
+                content 'text/json', self!search($channel, :json, |%args)
             }
             get -> 'around.html', :%args {
-                content
-                  'text/html; charset=UTF-8',
-                  self!around(|%args)
+                content 'text/html', self!around(|%args)
             }
             get -> 'around.json', :%args {
-                content
-                  'text/json; charset=UTF-8',
-                  self!around(:json, |%args)
+                content 'text/json', self!around(:json, |%args)
             }
 
             get -> CHANNEL $channel {
@@ -1082,53 +1074,39 @@ class App::IRC::Log:ver<0.0.18>:auth<cpan:ELIZABETH> {
             }
 
             get -> CHANNEL $channel, 'live.html', :%args {
-                content
-                  'text/html; charset=UTF-8',
-                  self!live($channel, |%args)
+                content 'text/html', self!live($channel, |%args)
             }
             get -> CHANNEL $channel, 'live.json', :%args {
-                content
-                  'text/json; charset=UTF-8',
-                  self!live($channel, :json, |%args)
+                content 'text/json', self!live($channel, :json, |%args)
             }
 
             get -> CHANNEL $channel, 'gist.html', :%args {
                 content
-                  'text/html; charset=UTF-8',
+                  'text/html',
                   self!gist($channel, %args.keys.first)         # XXX
             }
             get -> CHANNEL $channel, 'gist.json', :%args {
                 content
-                  'text/json; charset=UTF-8',
+                  'text/json',
                   self!gist($channel, %args.keys.first, :json)  # XXX
             }
 
             get -> CHANNEL $channel, 'scroll-down.html', :%args {
-                content
-                  'text/html; charset=UTF-8',
-                  self!scroll-down($channel, |%args)
+                content 'text/html', self!scroll-down($channel, |%args)
             }
             get -> CHANNEL $channel, 'scroll-down.json', :%args {
-                content
-                  'text/json; charset=UTF-8',
-                  self!scroll-down($channel, :json, |%args)
+                content 'text/json', self!scroll-down($channel, :json, |%args)
             }
 
             get -> CHANNEL $channel, 'scroll-up.html', :%args {
-                content
-                  'text/html; charset=UTF-8',
-                  self!scroll-up($channel, |%args)
+                content 'text/html', self!scroll-up($channel, |%args)
             }
             get -> CHANNEL $channel, 'scroll-up.json', :%args {
-                content
-                  'text/json; charset=UTF-8',
-                  self!scroll-up($channel, :json, |%args)
+                content 'text/json', self!scroll-up($channel, :json, |%args)
             }
 
             get -> CHANNEL $channel, 'search.html', :%args {
-                content
-                  'text/html; charset=UTF-8',
-                  self!search($channel, |%args)
+                content 'text/html', self!search($channel, |%args)
             }
 
             get -> CHANNEL $channel, 'today' {
