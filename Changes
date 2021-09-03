@@ -2,6 +2,10 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.21  2021-09-03T12:19:00+02:00
+    - Change "all words" parameter name from "all" to "all-words"
+      to prevent confusion with the .all method in templates.
+
 0.0.20  2021-09-03T11:34:44+02:00
     - Make sure all pages that need search pulldown values, have them
 

@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.20>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.21>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -731,7 +731,7 @@ class App::IRC::Log:ver<0.0.20>:auth<cpan:ELIZABETH> {
       :$to-month     = "",
       :$to-day       = "",
       :$ignorecase   = "",
-      :$all          = "",
+      :$all-words    = "",
       :$include-aliases = "",
       :$first-target = "",
       :$last-target  = "",
@@ -748,7 +748,7 @@ class App::IRC::Log:ver<0.0.20>:auth<cpan:ELIZABETH> {
 
         # Initial setup of parameters to clog.entries
         my %params;
-        %params<all>           := True if $all;
+        %params<all>           := True if $all-words;
         %params<ignorecase>    := True if $ignorecase;
         %params{$message-type} := True if $message-type;
 
@@ -844,7 +844,7 @@ class App::IRC::Log:ver<0.0.20>:auth<cpan:ELIZABETH> {
         my @years      := $clog.years;
 
         %params =
-          all                => $all,
+          all-words          => $all-words,
           control            => $message-type eq "control",
           conversation       => $message-type eq "conversation",
           channel            => $channel,
