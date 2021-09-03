@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.19>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.20>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -277,6 +277,7 @@ class App::IRC::Log:ver<0.0.19>:auth<cpan:ELIZABETH> {
                 %params<initial-topic-target> :=
                   $topic.target;
             }
+            add-search-pulldown-values(%params);
 
             # Render it!
             self!render: $!rendered-dir, $html, $crot, %params;
@@ -328,9 +329,11 @@ class App::IRC::Log:ver<0.0.19>:auth<cpan:ELIZABETH> {
                 ))
             }
 
-            self!render: $!rendered-dir, $html, $crot, {
+            my %params =
               channels => @channels,
-            }
+            ;
+            add-search-pulldown-values(%params);
+            self!render: $!rendered-dir, $html, $crot, %params;
         }
         $html
     }
@@ -386,7 +389,7 @@ class App::IRC::Log:ver<0.0.19>:auth<cpan:ELIZABETH> {
 
             my $first-date := @dates.head;
             my $last-date  := @dates.tail;
-            self!render: $!rendered-dir, $html, $crot, {
+            my %params =
               name             => $channel,
               channels         => @!channels,
               years            => @years,
@@ -398,7 +401,10 @@ class App::IRC::Log:ver<0.0.19>:auth<cpan:ELIZABETH> {
               first-human-date => human-date($first-date),
               last-date        => $last-date,
               last-human-date  => human-date($last-date),
-            }
+            ;
+            add-search-pulldown-values(%params);
+
+            self!render: $!rendered-dir, $html, $crot, %params;
         }
         $html
     }
@@ -502,6 +508,7 @@ class App::IRC::Log:ver<0.0.19>:auth<cpan:ELIZABETH> {
           elapsed    => $elapsed,
           entries    => @entries,
         ;
+        add-search-pulldown-values(%params);
 
         if @entries {
             %params<start-date> := @entries.head<date>;
@@ -689,10 +696,24 @@ class App::IRC::Log:ver<0.0.19>:auth<cpan:ELIZABETH> {
           nr-entries          => @entries.elems,
           up-target           => scroll-up(@entries),
         ;
+        add-search-pulldown-values(%params);
 
         $json
           ?? to-json(%params,:!pretty)
           !! render-template $crot, %params
+    }
+
+    sub add-search-pulldown-values(%params --> Nil) {
+        %params<entries-pp-options> := <25 50 100 250 500>;
+        %params<message-options> := (""           => "all messages",
+                                     conversation => "text only",
+                                     control      => "control only",
+                                    );
+        %params<type-options> := (words       => "as word(s)",
+                                  contains    => "containing",
+                                  starts-with => "starting with",
+                                  matches     => "as regex",
+                                 );
     }
 
     # Return content for searches
@@ -829,11 +850,9 @@ class App::IRC::Log:ver<0.0.19>:auth<cpan:ELIZABETH> {
           channel            => $channel,
           channels           => @!channels,
           dates              => $clog.dates,
-          days               => 1..31,
           elapsed            => ((now - $then) * 1000).Int,
           entries            => @entries,
           entries-pp         => $entries-pp,
-          entries-pp-options => <25 50 100 250 500>,
           start-date         => (@entries ?? @entries.head<date> !! ""),
           end-date           => (@entries ?? @entries.tail<date> !! ""),
           first-date         => $first-date,
@@ -847,10 +866,6 @@ class App::IRC::Log:ver<0.0.19>:auth<cpan:ELIZABETH> {
           last-date          => $last-date,
           last-human-date    => human-date($last-date),
           last-target        => (@entries ?? @entries.tail<target> !! ""),
-          message-options    => (""           => "all messages",
-                                 conversation => "text only",
-                                 control      => "control only",
-                                ),
           message-type       => $message-type,
           months             => @template-months,
           more               => $more,
@@ -862,13 +877,9 @@ class App::IRC::Log:ver<0.0.19>:auth<cpan:ELIZABETH> {
           to-month           => $to-month,
           to-year            => $to-year || @years.tail,
           type               => $type,
-          type-options       => (words       => "as word(s)",
-                                 contains    => "containing",
-                                 starts-with => "starting with",
-                                 matches     => "as regex",
-                                ),
           years              => @years,
         ;
+        add-search-pulldown-values(%params);
 
         $json
           ?? to-json(%params, :!pretty)

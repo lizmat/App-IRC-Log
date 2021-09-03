@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.20  2021-09-03T11:34:44+02:00
+    - Make sure all pages that need search pulldown values, have them
+
 0.0.19  2021-09-01T21:21:57+02:00
     - No need to add ';charset=utf-8' anymore with this version of Cro
     - Fix issue with human-date in scrolldown
