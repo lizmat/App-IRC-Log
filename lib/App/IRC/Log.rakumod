@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.21>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.22>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -719,19 +719,21 @@ class App::IRC::Log:ver<0.0.21>:auth<cpan:ELIZABETH> {
     # Return content for searches
     method !search(
        $channel,
-      :$nicks        = "",
-      :$entries-pp   = 25,
-      :$type         = "words",
-      :$message-type = "",  # control | conversation
-      :$query        = "",
-      :$from-year    = "",
-      :$from-month   = "",
-      :$from-day     = "",
-      :$to-year      = "",
-      :$to-month     = "",
-      :$to-day       = "",
-      :$ignorecase   = "",
-      :$all-words    = "",
+      :$nicks         = "",
+      :$entries-pp    = 25,
+      :$type          = "words",
+      :$message-type  = "",  # control | conversation
+      :$query         = "",
+      :$from-yyyymmdd = "",
+      :$from-year     = "",
+      :$from-month    = "",
+      :$from-day      = "",
+      :$to-yyyymmdd   = "",
+      :$to-year       = "",
+      :$to-month      = "",
+      :$to-day        = "",
+      :$ignorecase    = "",
+      :$all-words     = "",
       :$include-aliases = "",
       :$first-target = "",
       :$last-target  = "",
@@ -752,15 +754,23 @@ class App::IRC::Log:ver<0.0.21>:auth<cpan:ELIZABETH> {
         %params<ignorecase>    := True if $ignorecase;
         %params{$message-type} := True if $message-type;
 
-        # Handle period limitation
+        # Look for any period limitation
         my $from-date;
-        if $from-year && $from-month && $from-day {
+        if $from-yyyymmdd {
+            $from-date = $from-yyyymmdd.Date;
+        }
+        elsif $from-year && $from-month && $from-day {
             $from-date = Date.new($from-year, $from-month, $from-day) // Nil;
         }
         my $to-date;
-        if $to-year && $to-month && $to-day {
+        if $to-yyyymmdd {
+            $to-date = $to-yyyymmdd.Date;
+        }
+        elsif $to-year && $to-month && $to-day {
             $to-date = Date.new($to-year, $to-month, $to-day) // Nil;
         }
+
+        # Handle period limitation
         if $from-date || $to-date {
             $from-date = $clog.dates.head.Date unless $from-date;
             $to-date   = $clog.dates.tail.Date unless $to-date;
