@@ -29,5 +29,5 @@
     "Cro::HTTP::Server:ver<0.8.6>",
     "IRC::Log::Colabti:ver<0.0.30>:auth<cpan:ELIZABETH>"
   ],
-  "version": "0.0.22"
+  "version": "0.0.23"
 }

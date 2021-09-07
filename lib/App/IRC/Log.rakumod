@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.22>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.23>:auth<cpan:ELIZABETH> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -746,7 +746,11 @@ class App::IRC::Log:ver<0.0.22>:auth<cpan:ELIZABETH> {
         my $crot := self!template-for($channel, 'search');
         get-template-repository.refresh($crot.absolute)
           if $crot.modified > $!liftoff;
-        my $clog := self.clog($channel);
+        my $clog  := self.clog($channel);
+        my @dates := $clog.dates;
+        my @years := $clog.years;
+        my $first-date := @dates.head // "";
+        my $last-date  := @dates.tail // "";
 
         # Initial setup of parameters to clog.entries
         my %params;
@@ -772,11 +776,12 @@ class App::IRC::Log:ver<0.0.22>:auth<cpan:ELIZABETH> {
 
         # Handle period limitation
         if $from-date || $to-date {
-            $from-date = $clog.dates.head.Date unless $from-date;
-            $to-date   = $clog.dates.tail.Date unless $to-date;
+            $from-date = @dates.head unless $from-date;
+            $to-date   = @dates.tail unless $to-date;
             ($from-date, $to-date) = ($to-date, $from-date)
               if $to-date < $from-date;
-            %params<dates> := $from-date .. $to-date;
+            %params<dates> := $from-date.Date .. $to-date.Date
+              unless $from-date eq $first-date && $to-date eq $last-date;
         }
 
         my $moving;
@@ -849,10 +854,6 @@ class App::IRC::Log:ver<0.0.22>:auth<cpan:ELIZABETH> {
             return "";
         }
 
-        my $first-date := @entries.head<date> // "";
-        my $last-date  := @entries.tail<date> // "";
-        my @years      := $clog.years;
-
         %params =
           all-words          => $all-words,
           control            => $message-type eq "control",
@@ -867,15 +868,14 @@ class App::IRC::Log:ver<0.0.22>:auth<cpan:ELIZABETH> {
           end-date           => (@entries ?? @entries.tail<date> !! ""),
           first-date         => $first-date,
           first-human-date   => human-date($first-date),
-          first-target       => (@entries ?? @entries.head<target> !! ""),
           from-day           => $from-day,
           from-month         => $from-month,
           from-year          => $from-year || @years.head,
+          from-yyyymmdd      => $from-yyyymmdd,
           ignorecase         => $ignorecase,
           include-aliases    => $include-aliases,
           last-date          => $last-date,
           last-human-date    => human-date($last-date),
-          last-target        => (@entries ?? @entries.tail<target> !! ""),
           message-type       => $message-type,
           months             => @template-months,
           more               => $more,
@@ -886,6 +886,7 @@ class App::IRC::Log:ver<0.0.22>:auth<cpan:ELIZABETH> {
           to-day             => $to-day,
           to-month           => $to-month,
           to-year            => $to-year || @years.tail,
+          to-yyyymmdd        => $to-yyyymmdd,
           type               => $type,
           years              => @years,
         ;

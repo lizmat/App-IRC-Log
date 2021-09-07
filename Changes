@@ -2,6 +2,10 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.23  2021-09-07T12:59:38+02:00
+    - Fix the semantics of "first-date" and "last-date" in !search
+    - Remove "first-target" and "last-target", they are not needed
+
 0.0.22  2021-09-07T11:51:49+02:00
     - Accept "from-yyyymmdd" and "to-yyyymmdd" as overriding alternatives
       to indicate the period in which to search.
