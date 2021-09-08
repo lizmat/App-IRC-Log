@@ -1,10 +1,10 @@
 use v6.*;
 
-use Array::Sorted::Util:ver<0.0.6>:auth<cpan:ELIZABETH>;
+use Array::Sorted::Util:ver<0.0.7>:auth<zef:lizmat>;
 use Cro::HTTP::Router:ver<0.8.6>;
 use Cro::WebApp::Template:ver<0.8.6>;
 use Cro::WebApp::Template::Repository:ver<0.8.6>;
-use IRC::Channel::Log:ver<0.0.34>:auth<cpan:ELIZABETH>;
+use IRC::Channel::Log:ver<0.0.36>:auth<zef:lizmat>;
 use JSON::Fast:ver<0.16>;
 use RandomColor;
 
@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.23>:auth<cpan:ELIZABETH> {
+class App::IRC::Log:ver<0.0.24>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -1274,7 +1274,7 @@ C<App::Raku::Log>).
 
 =head1 AUTHOR
 
-Elizabeth Mattijsen <liz@wenzperl.nl>
+Elizabeth Mattijsen <liz@raku.rocks>
 
 Source can be located at: https://github.com/lizmat/App-IRC-Log . Comments and
 Pull Requests are welcome.

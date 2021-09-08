@@ -50,7 +50,7 @@ It is currently being used to set up a website for showing the historical IRC lo
 AUTHOR
 ======
 
-Elizabeth Mattijsen <liz@wenzperl.nl>
+Elizabeth Mattijsen <liz@raku.rocks>
 
 Source can be located at: https://github.com/lizmat/App-IRC-Log . Comments and Pull Requests are welcome.
 
