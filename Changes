@@ -2,6 +2,10 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.25  2021-09-29T22:49:39+02:00
+    - Added "entries" parameter to scroll-up logic, defaults to 10
+    - Added support for live-plugins
+
 0.0.24  2021-09-08T11:50:31+02:00
     - Migrate to zef ecosystem, update dependency
     - Update email address
@@ -40,7 +44,7 @@ Revision history for App-IRC-Log
     - Add available channels to live
 
 0.0.14  2021-08-18T15:07:52+02:00
-    - make gist.html endpoint use the 'gist' template
+    - Make gist.html endpoint use the 'gist' template
 
 0.0.13  2021-08-18T13:00:22+02:00
     - Move handling of /targets.html to /channel/gist.html

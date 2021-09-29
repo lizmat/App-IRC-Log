@@ -61,7 +61,7 @@ sub generator($) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.24>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.25>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -73,6 +73,7 @@ class App::IRC::Log:ver<0.0.24>:auth<zef:lizmat> {
     has         &.htmlize       is required;  # make HTML of message of entry
     has Instant $.liftoff is built(:bind) = $*INIT-INSTANT;
     has str     @.channels = self.default-channels;  # channels to provide
+    has         @.live-plugins;                      # any plugins for live
     has         @.day-plugins;                       # any plugins for day
     has         %!clogs;       # hash of IRC::Channel::Log objects
 
@@ -561,6 +562,7 @@ class App::IRC::Log:ver<0.0.24>:auth<zef:lizmat> {
     method !scroll-up(
        $channel,
       :$target!,
+      :$entries = 10,
       :$json,      # return as JSON instead of HTML
     --> Str:D) {
         my $crot := self!template-for($channel, 'additional');
@@ -570,12 +572,15 @@ class App::IRC::Log:ver<0.0.24>:auth<zef:lizmat> {
 
         # Get any additional entries
         my @entries = self!ready-entries-for-template(
-          $clog.entries(:conversation, :until-target($target)).head(10).reverse,
+          $clog
+            .entries(:conversation, :until-target($target))
+            .head($entries)
+            .reverse,
           $channel, $clog.colors, :short
         );
 
         # Run all the plugins
-        for @!day-plugins -> &plugin {
+        for @!live-plugins -> &plugin {
             &plugin.returns ~~ Nil
               ?? plugin(@entries)
               !! (@entries = plugin(@entries))
@@ -621,7 +626,7 @@ class App::IRC::Log:ver<0.0.24>:auth<zef:lizmat> {
         }
 
         # Run all the plugins
-        for @!day-plugins -> &plugin {
+        for @!live-plugins -> &plugin {
             &plugin.returns ~~ Nil
               ?? plugin(@entries)
               !! (@entries = plugin(@entries))
@@ -670,7 +675,7 @@ class App::IRC::Log:ver<0.0.24>:auth<zef:lizmat> {
         my $elapsed := ((now - $then) * 1000).Int;
 
         # Run all the plugins
-        for @!day-plugins -> &plugin {
+        for @!live-plugins -> &plugin {
             &plugin.returns ~~ Nil
               ?? plugin(@entries)
               !! (@entries = plugin(@entries))
