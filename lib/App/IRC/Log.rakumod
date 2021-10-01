@@ -57,11 +57,31 @@ sub generator($) {
     RandomColor.new(:luminosity<bright>).list.head
 }
 
+sub add-search-pulldown-values(%params --> Nil) {
+    %params<entries-pp-options> := <25 50 100 250 500>;
+    %params<message-options> := (""           => "all messages",
+                                 conversation => "text only",
+                                 control      => "control only",
+                                );
+    %params<type-options> := (words       => "as word(s)",
+                              contains    => "containing",
+                              starts-with => "starting with",
+                              matches     => "as regex",
+                             );
+}
+
+# Create result given template, parameters and json flag
+sub create-result($crot, %params, $json) {
+    $json
+      ?? to-json(%params,:!pretty)
+      !! render-template $crot, %params
+}
+
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.25>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.26>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -466,9 +486,7 @@ class App::IRC::Log:ver<0.0.25>:auth<zef:lizmat> {
           entries  => @entries,
         ;
 
-        $json
-          ?? to-json(%params,:!pretty)
-          !! render-template $crot, %params
+        create-result($crot, %params, $json)
     }
 
     # Return content for gist helper
@@ -509,53 +527,13 @@ class App::IRC::Log:ver<0.0.25>:auth<zef:lizmat> {
           elapsed    => $elapsed,
           entries    => @entries,
         ;
-        add-search-pulldown-values(%params);
 
         if @entries {
             %params<start-date> := @entries.head<date>;
             %params<end-date>   := @entries.tail<date>;
         }
-
-        $json
-          ?? to-json(%params,:!pretty)
-          !! render-template $crot, %params
-    }
-
-    # Return until target and mark entries to replace on update
-    sub scroll-up(@entries) {
-        if @entries {
-            @entries[0]<up-removable> := True;
-            my int $i = 0;
-            @entries[$i]<up-removable> := True
-              while @entries[++$i]<same-sender>;
-            @entries[$i - 1]<target>
-        }
-        else {
-            ""
-        }
-    }
-
-    # Return from target and number of entries to replace on update
-    # (so that a no-op can be detected) on a scroll-down
-    sub scroll-down(@entries) {
-        if @entries.elems -> int $elems {
-            if @entries.tail<same-sender> {
-                my int $i = $elems;
-                @entries[$i]<down-removable> := True
-                  while @entries[--$i]<same-sender>;
-                given @entries[$i] -> \entry {
-                    entry<down-removable> := True;
-                    entry<target>, $elems - $i
-                }
-            }
-            elsif @entries.tail -> \entry {
-                entry<down-removable> := True;
-                entry<target>, 1
-            }
-        }
-        else {
-            "", 0
-        }
+        add-search-pulldown-values(%params);
+        create-result($crot, %params, $json)
     }
 
     # Return content for scroll-up entries
@@ -592,18 +570,14 @@ class App::IRC::Log:ver<0.0.25>:auth<zef:lizmat> {
             return "";
         }
 
-        my %params = :$channel, :@entries, :up-target(scroll-up(@entries));
-
-        $json
-          ?? to-json(%params, :!pretty)
-          !! render-template $crot, %params
+        my %params = :$channel, :@entries;
+        create-result($crot, %params, $json);
     }
 
     # Return content for scroll-down entries
     method !scroll-down(
        $channel,
       :$target!,
-      :$current-entries!,
       :$json,      # return as JSON instead of HTML
     --> Str:D) {
         my $crot := self!template-for($channel, 'additional');
@@ -613,17 +587,16 @@ class App::IRC::Log:ver<0.0.25>:auth<zef:lizmat> {
 
         # Get any additional entries
         my @entries = $clog.entries(:conversation, :from-target($target));
-        my str $prev-date;
-        $prev-date = .date.Str with @entries.head.prev;
+        if @entries == 1 {
+            response.status = 204;
+            return "";
+        }
 
+        # Ready the entries for the template
         @entries = self!ready-entries-for-template(
           @entries, $channel, $clog.colors, :short
         );
-
-        # Make sure we don't start with a Date header if still same date
-        if $prev-date && @entries.head -> \entry {
-            entry<human-date> := "" if entry<date> eq $prev-date;
-        }
+        @entries.shift;  # drop the target
 
         # Run all the plugins
         for @!live-plugins -> &plugin {
@@ -632,18 +605,8 @@ class App::IRC::Log:ver<0.0.25>:auth<zef:lizmat> {
               !! (@entries = plugin(@entries))
         }
 
-        # Nothing after (yet)
-        if @entries == $current-entries {
-            response.status = 204;
-            return "";
-        }
-
-        my ($down-target, $down-entries) = scroll-down(@entries);
-        my %params = :$channel, :@entries, :$down-entries, :$down-target;
-
-        $json
-          ?? to-json(%params, :!pretty)
-          !! render-template $crot, %params
+        my %params = :$channel, :@entries;
+        create-result($crot, %params, $json);
     }
 
     # Return content for live channel view
@@ -682,7 +645,6 @@ class App::IRC::Log:ver<0.0.25>:auth<zef:lizmat> {
         }
 
         my @dates := $clog.dates;
-        my ($down-target, $down-entries) = scroll-down(@entries);
         my %params =
           channel             => $channel,
           channels            => @!channels,
@@ -691,34 +653,15 @@ class App::IRC::Log:ver<0.0.25>:auth<zef:lizmat> {
           end-date            => @entries.tail<date> // "",
           first-date          => @dates.head,
           last-date           => @dates.tail,
-          down-entries        => $down-entries,
-          down-target         => $down-target,
           elapsed             => ((now - $then) * 1000).Int,
           entries             => @entries,
           entries-pp          => $entries-pp,
           first-target        => @entries.head<target> // "",
           last-target         => @entries.tail<target> // "",
           nr-entries          => @entries.elems,
-          up-target           => scroll-up(@entries),
         ;
         add-search-pulldown-values(%params);
-
-        $json
-          ?? to-json(%params,:!pretty)
-          !! render-template $crot, %params
-    }
-
-    sub add-search-pulldown-values(%params --> Nil) {
-        %params<entries-pp-options> := <25 50 100 250 500>;
-        %params<message-options> := (""           => "all messages",
-                                     conversation => "text only",
-                                     control      => "control only",
-                                    );
-        %params<type-options> := (words       => "as word(s)",
-                                  contains    => "containing",
-                                  starts-with => "starting with",
-                                  matches     => "as regex",
-                                 );
+        create-result($crot, %params, $json);
     }
 
     # Return content for searches
@@ -896,10 +839,7 @@ class App::IRC::Log:ver<0.0.25>:auth<zef:lizmat> {
           years              => @years,
         ;
         add-search-pulldown-values(%params);
-
-        $json
-          ?? to-json(%params, :!pretty)
-          !! render-template $crot, %params
+        create-result($crot, %params, $json);
     }
 
     proto method html(|) is implementation-detail {*}
