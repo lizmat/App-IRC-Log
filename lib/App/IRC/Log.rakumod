@@ -81,7 +81,7 @@ sub create-result($crot, %params, $json) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.27>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.28>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -95,6 +95,7 @@ class App::IRC::Log:ver<0.0.27>:auth<zef:lizmat> {
     has str     @.channels = self.default-channels;  # channels to provide
     has         @.live-plugins;                      # any plugins for live
     has         @.day-plugins;                       # any plugins for day
+    has         %.descriptions;                      # channel descriptions
     has         %!clogs;       # hash of IRC::Channel::Log objects
 
     my constant $nick-colors-json = 'nicks.json';
@@ -413,6 +414,7 @@ class App::IRC::Log:ver<0.0.27>:auth<zef:lizmat> {
             my %params =
               channel          => $channel,
               channels         => @!channels,
+              description      => %!descriptions{$channel},
               years            => @years,
               date             => $last-date,
               start-date       => $last-date,

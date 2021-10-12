@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.28  2021-10-12T19:36:58+02:00
+    - Add support for .descriptions, and pass that onto index
+
 0.0.27  2021-10-12T16:22:39+02:00
     - Fix channel setting for index page
 
