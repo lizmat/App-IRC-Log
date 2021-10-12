@@ -81,7 +81,7 @@ sub create-result($crot, %params, $json) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.26>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.27>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -411,7 +411,7 @@ class App::IRC::Log:ver<0.0.26>:auth<zef:lizmat> {
             my $first-date := @dates.head;
             my $last-date  := @dates.tail;
             my %params =
-              name             => $channel,
+              channel          => $channel,
               channels         => @!channels,
               years            => @years,
               date             => $last-date,

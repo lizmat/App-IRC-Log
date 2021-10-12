@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.27  2021-10-12T16:22:39+02:00
+    - Fix channel setting for index page
+
 0.0.26  2021-10-01T17:28:07+02:00
     - Simplify up/down scroll logic, JS can do that better clientside
     - Simplify some internals
