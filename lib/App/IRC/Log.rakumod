@@ -81,7 +81,7 @@ sub create-result($crot, %params, $json) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.28>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.29>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -379,47 +379,79 @@ class App::IRC::Log:ver<0.0.28>:auth<zef:lizmat> {
         {
             my $clog  := self.clog($channel);
             my @dates := $clog.dates;
-            my %months = @dates.categorize: *.substr(0,7);
-            my %years  = %months.categorize: *.key.substr(0,4);
-            my @years  = %years.sort(*.key).reverse.map: {
-                Map.new((
-                  channel    => $channel,
-                  year       => $_.key,
-                  date       => @dates.tail,
-                  first-date => @dates.head,
-                  last-date  => @dates.tail,
-                  months  => $_.value.sort(*.key).map: {
-                      my $dates = $_.value.map( -> $date {
-                            my $log := $clog.log($date);
-                            Map.new((
-                              control      => $log.nr-control-entries,
-                              conversation => $log.nr-conversation-entries,
-                              day          => $date.substr(8,2).Int,
-                              date         => $date,
-                            ))
-                        }).Array;
-                      $dates.prepend((Map.new(( empty => True, day => $_ )) for (1 ..^ $_.value[0].substr(8,2).Int)));
-                      $dates.append((Map.new(( empty => True, day => $_ )) for ($_.value[* - 1].substr(8,2).Int ^.. 31)));
-                     Map.new((
-                        month       => $_.key,
-                        human-month => @human-months[$_.key.substr(5,2)],
-                        dates       => $dates
-                     ))
-                  },
-                ))
-            }
-
             my $first-date := @dates.head;
             my $last-date  := @dates.tail;
+
+            my str $last-yyyy-mm;
+            my int $days-in-month;
+            my @days;
+            my @months;
+            my @years;
+
+            sub finish-month(--> Nil) {
+                if @days {
+                    my int $days = $last-date.starts-with($last-yyyy-mm)
+                      ?? @days.elems
+                      !! $days-in-month;
+
+                    # fill up any holes
+                    for ^$days -> int $i {
+                        @days[$i] := Map.new( (day => $i + 1) )
+                          without @days[$i];
+                    }
+
+                    @months.push: Map.new((
+                      channel     => $channel,
+                      month       => $last-yyyy-mm,
+                      human-month => @human-months[$last-yyyy-mm.substr(5,2)],
+                      dates       => @days.clone,
+                    ));
+                    @days = ();
+                }
+            }
+
+            sub finish-year(--> Nil) {
+                if @months {
+                    @years[@years.elems] := Map.new((
+                      channel => $channel,
+                      year    => $last-yyyy-mm.substr(0,4),
+                      months  => @months.clone,
+                    ));
+                    @months = ();
+                }
+            }
+
+            for @dates -> $date {
+                my str $yyyy-mm = $date.substr(0,7);
+                my int $day     = $date.substr(8,2).Int;
+
+                # new month
+                if $yyyy-mm ne $last-yyyy-mm {
+                    finish-month;
+                    $days-in-month = $date.Date.days-in-month;
+
+                    finish-year
+                      if !$last-yyyy-mm.starts-with($date.substr(0,4));
+
+                    $last-yyyy-mm = $yyyy-mm;
+                }
+
+                @days[$day - 1] := Map.new((
+                  channel      => $channel,
+                  date         => $date,
+                  day          => $day,
+                )) if $clog.log($date).nr-conversation-entries;
+            }
+            finish-month;
+            finish-year;
+
             my %params =
               channel          => $channel,
               channels         => @!channels,
               description      => %!descriptions{$channel},
               years            => @years,
-              date             => $last-date,
               start-date       => $last-date,
               end-date         => $last-date,
-              human-date       => human-date($last-date),
               first-date       => $first-date,
               first-human-date => human-date($first-date),
               last-date        => $last-date,
