@@ -391,7 +391,7 @@ class App::IRC::Log:ver<0.0.29>:auth<zef:lizmat> {
             sub finish-month(--> Nil) {
                 if @days {
                     my int $days = $last-date.starts-with($last-yyyy-mm)
-                      ?? @days.elems
+                      ?? $last-date.substr(8,2).Int
                       !! $days-in-month;
 
                     # fill up any holes
