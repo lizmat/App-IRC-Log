@@ -81,7 +81,7 @@ sub create-result($crot, %params, $json) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.29>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.30>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -115,7 +115,7 @@ class App::IRC::Log:ver<0.0.29>:auth<zef:lizmat> {
 
     # Start loading the logs asynchronously.  No need to be thread-safe
     # here as here will only be the thread creating the object.
-    submethod TWEAK(--> Nil) {
+    submethod TWEAK(:$batch = 16, :$degree = Kernel.cpu-cores --> Nil) {
         my @problems;
         for
           :$!log-dir, :$!static-dir, :$!template-dir,
@@ -139,7 +139,10 @@ class App::IRC::Log:ver<0.0.29>:auth<zef:lizmat> {
               class     => $!log-class,
               generator => &generator,
               state     => $!state-dir.add($_),
-              name      => $_;
+              name      => $_,
+              batch     => $batch,
+              degree    => $degree,
+            ;
 
             # Monitor active channels for changes
             if $clog.active {
@@ -621,7 +624,7 @@ class App::IRC::Log:ver<0.0.29>:auth<zef:lizmat> {
 
         # Get any additional entries
         my @entries = $clog.entries(:conversation, :from-target($target));
-        if @entries == 1 {
+        if @entries < 1 {  # after server restart, there could no entries yet
             response.status = 204;
             return "";
         }
