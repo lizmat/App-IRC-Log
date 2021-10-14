@@ -2,6 +2,10 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.31  2021-10-14T13:53:08+02:00
+    - Up dependency on IRC::Channel::Log
+    - Make sure all applicable endpoints have a sensible "month" value
+
 0.0.30  2021-10-13T13:02:42+02:00
     - Handle scroll-down events during server restarting
     - Allow for :batch and :degree parallellism settings

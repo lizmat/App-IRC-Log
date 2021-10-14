@@ -4,7 +4,7 @@ use Array::Sorted::Util:ver<0.0.7>:auth<zef:lizmat>;
 use Cro::HTTP::Router:ver<0.8.6>;
 use Cro::WebApp::Template:ver<0.8.6>;
 use Cro::WebApp::Template::Repository:ver<0.8.6>;
-use IRC::Channel::Log:ver<0.0.36>:auth<zef:lizmat>;
+use IRC::Channel::Log:ver<0.0.37>:auth<zef:lizmat>;
 use JSON::Fast:ver<0.16>;
 use RandomColor;
 
@@ -81,7 +81,7 @@ sub create-result($crot, %params, $json) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.30>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.31>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -115,7 +115,7 @@ class App::IRC::Log:ver<0.0.30>:auth<zef:lizmat> {
 
     # Start loading the logs asynchronously.  No need to be thread-safe
     # here as here will only be the thread creating the object.
-    submethod TWEAK(:$batch = 16, :$degree = Kernel.cpu-cores --> Nil) {
+    submethod TWEAK(:$batch = 16, :$degree = Kernel.cpu-cores/2 --> Nil) {
         my @problems;
         for
           :$!log-dir, :$!static-dir, :$!template-dir,
@@ -181,7 +181,7 @@ class App::IRC::Log:ver<0.0.30>:auth<zef:lizmat> {
         # more than once to the hash.
         given %!clogs{$channel} {
             if $_ ~~ Promise {
-                %!clogs{$channel} := .result  # not ready yet
+                %!clogs{$channel} := .result  # not ready yet, will block
             }
             else {
                 $_ // Nil                     # ready, so go!
@@ -267,6 +267,7 @@ class App::IRC::Log:ver<0.0.30>:auth<zef:lizmat> {
               :$channel,
               :@!channels,
               :$date,
+              :month($date.substr(0,7)),
               :date-human("$Date.day() @human-months[$Date.month] $Date.year()"),
               :next-date($Date.later(:1day)),
               :next-month($date.substr(0,7).succ),
@@ -351,6 +352,7 @@ class App::IRC::Log:ver<0.0.30>:auth<zef:lizmat> {
                   first-human-date => human-date($first-date),
                   last-date        => $last-date,
                   last-human-date  => human-date($last-date),
+                  month            => $last-date.substr(0,7),
                 ))
             }
 
@@ -405,7 +407,7 @@ class App::IRC::Log:ver<0.0.30>:auth<zef:lizmat> {
 
                     @months.push: Map.new((
                       channel     => $channel,
-                      month       => $last-yyyy-mm,
+                      month       => $last-yyyy-mm.clone,
                       human-month => @human-months[$last-yyyy-mm.substr(5,2)],
                       dates       => @days.clone,
                     ));
@@ -551,23 +553,27 @@ class App::IRC::Log:ver<0.0.30>:auth<zef:lizmat> {
             }
         }
 
-        my $then    := now;
-        my @entries  = find-em;
-        my $elapsed := ((now - $then) * 1000).Int;
+        my $then     := now;
+        my @entries   = find-em;
+        my $elapsed  := ((now - $then) * 1000).Int;
+        my $last-date := @dates.tail;
 
         %params =
           channel    => $channel,
           channels   => @!channels,
           first-date => @dates.head,
-          last-date  => @dates.tail,
+          last-date  => $last-date,
           targets    => @targets,
           elapsed    => $elapsed,
           entries    => @entries,
+          month      => $last-date.substr(0,7),
         ;
 
         if @entries {
-            %params<start-date> := @entries.head<date>;
+            my $first-gist-date := @entries.head<date>;
+            %params<start-date> := $first-gist-date,
             %params<end-date>   := @entries.tail<date>;
+            %params<month>      := $first-gist-date.substr(0,7);
         }
         add-search-pulldown-values(%params);
         create-result($crot, %params, $json)
@@ -681,7 +687,8 @@ class App::IRC::Log:ver<0.0.30>:auth<zef:lizmat> {
               !! (@entries = plugin(@entries))
         }
 
-        my @dates := $clog.dates;
+        my @dates     := $clog.dates;
+        my $last-date := @dates.tail;
         my %params =
           channel             => $channel,
           channels            => @!channels,
@@ -689,13 +696,14 @@ class App::IRC::Log:ver<0.0.30>:auth<zef:lizmat> {
           start-date          => @entries.head<date> // "",
           end-date            => @entries.tail<date> // "",
           first-date          => @dates.head,
-          last-date           => @dates.tail,
+          last-date           => $last-date,
           elapsed             => ((now - $then) * 1000).Int,
           entries             => @entries,
           entries-pp          => $entries-pp,
           first-target        => @entries.head<target> // "",
           last-target         => @entries.tail<target> // "",
           nr-entries          => @entries.elems,
+          month               => $last-date.substr(0,7),
         ;
         add-search-pulldown-values(%params);
         create-result($crot, %params, $json);
@@ -862,6 +870,7 @@ class App::IRC::Log:ver<0.0.30>:auth<zef:lizmat> {
           last-date          => $last-date,
           last-human-date    => human-date($last-date),
           message-type       => $message-type,
+          month              => $last-date.substr(0,7),
           months             => @template-months,
           more               => $more,
           name               => $channel,
