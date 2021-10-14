@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.32  2021-10-14T17:49:47+02:00
+    - Rework the home page rendering hash
+
 0.0.31  2021-10-14T13:53:08+02:00
     - Up dependency on IRC::Channel::Log
     - Make sure all applicable endpoints have a sensible "month" value

@@ -81,7 +81,7 @@ sub create-result($crot, %params, $json) {
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.31>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.32>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -268,7 +268,7 @@ class App::IRC::Log:ver<0.0.31>:auth<zef:lizmat> {
               :@!channels,
               :$date,
               :month($date.substr(0,7)),
-              :date-human("$Date.day() @human-months[$Date.month] $Date.year()"),
+              :human-date(human-date($date)),
               :next-date($Date.later(:1day)),
               :next-month($date.substr(0,7).succ),
               :next-year($date.substr(0,4).succ),
@@ -320,7 +320,9 @@ class App::IRC::Log:ver<0.0.31>:auth<zef:lizmat> {
           || $html.modified < $!liftoff       # file is too old
                             | $crot.modified  # or template changed
         {
-            my @channels = @!channels.map: -> $channel {
+            my str $very-first-date = '9999-12-31';
+            my str $very-last-date  = '0000-01-01';
+            my @channel-info = @!channels.map: -> $channel {
                 my $clog  := self.clog($channel);
                 my @dates := $clog.dates;
                 my %months = @dates.categorize: *.substr(0,7);
@@ -342,8 +344,11 @@ class App::IRC::Log:ver<0.0.31>:auth<zef:lizmat> {
 
                 my $first-date := @dates.head;
                 my $last-date  := @dates.tail;
+                $very-first-date min= $first-date;
+                $very-last-date  max= $last-date;
 
                 Map.new((
+                  active           => $clog.active,
                   name             => $channel,
                   years            => @years,
                   start-date       => $last-date,
@@ -357,7 +362,16 @@ class App::IRC::Log:ver<0.0.31>:auth<zef:lizmat> {
             }
 
             my %params =
-              channels => @channels,
+              first-date       => $very-first-date,
+              first-human-date => human-date($very-first-date),
+              last-date        => $very-last-date,
+              last-human-date  => human-date($very-last-date),
+              start-date       => $very-first-date,
+              end-date         => $very-last-date,
+              channel-info     => @channel-info,
+              channel          => "",   # prevent warnings
+              channels         => @!channels,
+              description      => %!descriptions<__home__> // "",
             ;
             add-search-pulldown-values(%params);
             self!render: $!rendered-dir, $html, $crot, %params;
