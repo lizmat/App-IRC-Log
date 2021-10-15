@@ -2,6 +2,11 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.33  2021-10-15T19:55:55+02:00
+    - Add support for .one-liners
+    - Further simplification of home page rendering hash
+    - Add support for delimiters in channel specification
+
 0.0.32  2021-10-14T17:49:47+02:00
     - Rework the home page rendering hash
 

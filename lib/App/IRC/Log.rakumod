@@ -77,11 +77,14 @@ sub create-result($crot, %params, $json) {
       !! render-template $crot, %params
 }
 
+# Role to mark channel names as divider or not
+my role Divider { has $.divider }
+
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.32>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.33>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -92,11 +95,12 @@ class App::IRC::Log:ver<0.0.32>:auth<zef:lizmat> {
     has         &.colorize-nick is required;  # colorize a nick in HTML
     has         &.htmlize       is required;  # make HTML of message of entry
     has Instant $.liftoff is built(:bind) = $*INIT-INSTANT;
-    has str     @.channels = self.default-channels;  # channels to provide
-    has         @.live-plugins;                      # any plugins for live
-    has         @.day-plugins;                       # any plugins for day
-    has         %.descriptions;                      # channel descriptions
-    has         %!clogs;       # hash of IRC::Channel::Log objects
+    has Str     @.channels = self.default-channels;  # channels to provide
+    has         @.live-plugins;  # any plugins for live
+    has         @.day-plugins;   # any plugins for day
+    has         %.descriptions;  # long channel descriptions
+    has         %.one-liners;    # short channel descriptions
+    has         %!clogs;         # hash of IRC::Channel::Log objects
 
     my constant $nick-colors-json = 'nicks.json';
 
@@ -115,7 +119,11 @@ class App::IRC::Log:ver<0.0.32>:auth<zef:lizmat> {
 
     # Start loading the logs asynchronously.  No need to be thread-safe
     # here as here will only be the thread creating the object.
-    submethod TWEAK(:$batch = 16, :$degree = Kernel.cpu-cores/2 --> Nil) {
+    submethod TWEAK(
+      :$batch = 16,
+      :$degree = Kernel.cpu-cores/2,
+      :&channel-order,
+    --> Nil) {
         my @problems;
         for
           :$!log-dir, :$!static-dir, :$!template-dir,
@@ -131,6 +139,11 @@ class App::IRC::Log:ver<0.0.32>:auth<zef:lizmat> {
         if @problems {
             die ("Found problems in directory specification:",
               |@problems).join: "\n  ";
+        }
+
+        # Mark channel dividers
+        @!channels = @!channels.map: {
+            $_ but Divider(.starts-with('-') ?? .substr(1) !! "")
         }
 
         %!clogs{$_} := start {  # start by storing the Promise
@@ -159,7 +172,7 @@ class App::IRC::Log:ver<0.0.32>:auth<zef:lizmat> {
             }
 
             $clog  # the result of the Promise
-        } for @!channels;
+        } for @!channels.grep: !*.divider;
     }
 
     # Perform all actions associated with shutting down.
@@ -198,7 +211,7 @@ class App::IRC::Log:ver<0.0.32>:auth<zef:lizmat> {
         entries.map: {
             my str $date = .date.Str;
             my str $hhmm = .hh-mm // "";
-            my str $nick = .nick;
+            my str $nick = .nick  // "";
             my int $type = .control.Int;
             my %hash =
               channel         => $channel,
@@ -264,27 +277,30 @@ class App::IRC::Log:ver<0.0.32>:auth<zef:lizmat> {
 
             # Set up parameters
             my %params =
-              :$channel,
-              :@!channels,
-              :$date,
-              :month($date.substr(0,7)),
-              :human-date(human-date($date)),
-              :next-date($Date.later(:1day)),
-              :next-month($date.substr(0,7).succ),
-              :next-year($date.substr(0,4).succ),
-              :prev-date($Date.earlier(:1day)),
-              :prev-month($clog.is-first-date-of-month($date)
+              channel      => $channel,
+              active       => $clog.active,
+              description  => %!descriptions{$channel},
+              descriptions => %!descriptions,
+              one-liner    => %!one-liners{$channel},
+              one-liners   => %!one-liners,
+              channels     => @!channels,
+              date         => $date,
+              human-date   => human-date($date),
+              month        => $date.substr(0,7),
+              next-date    => $Date.later(:1day),
+              next-month   => $date.substr(0,7).succ,
+              next-year    => $date.substr(0,4).succ,
+              prev-date    => $Date.earlier(:1day),
+              prev-month   => $clog.is-first-date-of-month($date)
                 ?? "this/$Date.earlier(:1month).first-date-in-month()"
-                !! $date.substr(0,7)
-              ),
-              :prev-year($clog.is-first-date-of-year($date)
+                !! $date.substr(0,7),
+              prev-year    => $clog.is-first-date-of-year($date)
                 ?? 'this/' ~ Date.new($Date.year - 1, 1, 1)
-                !! $date.substr(0,4)
-              ),
-              :start-date($date),
-              :end-date($date),
-              :first-date(@dates.head),
-              :last-date(@dates.tail),
+                !! $date.substr(0,4),
+              start-date   => $date,
+              end-date     => $date,
+              first-date   => @dates.head,
+              last-date    => @dates.tail,
               :@entries
             ;
 
@@ -323,42 +339,67 @@ class App::IRC::Log:ver<0.0.32>:auth<zef:lizmat> {
             my str $very-first-date = '9999-12-31';
             my str $very-last-date  = '0000-01-01';
             my @channel-info = @!channels.map: -> $channel {
-                my $clog  := self.clog($channel);
-                my @dates := $clog.dates;
-                my %months = @dates.categorize: *.substr(0,7);
-                my %years  = %months.categorize: *.key.substr(0,4);
-                my @years  = %years.sort(*.key).map: {
+                if $channel.divider -> $divider {
+                    Map.new((:$divider))
+                }
+                else {
+                    my $clog  := self.clog($channel);
+                    my @dates := $clog.dates;
+
+                    my str $last-yyyy-mm;
+                    my @months;
+                    my @years;
+
+                    sub finish-year(--> Nil) {
+                        if @months {
+                            @years[@years.elems] := Map.new((
+                              channel => $channel,
+                              year    => $last-yyyy-mm.substr(0,4),
+                              months  => @months.clone,
+                            ));
+                            @months = ();
+                        }
+                    }
+
+                    for @dates -> $date {
+                        my str $yyyy-mm = $date.substr(0,7);
+
+                        # new month
+                        if $yyyy-mm ne $last-yyyy-mm {
+                            finish-year
+                              if !$last-yyyy-mm.starts-with($date.substr(0,4));
+                            @months.push: Map.new((
+                              channel     => $channel,
+                              month       => $yyyy-mm,
+                              human-month =>
+                                @human-months[$yyyy-mm.substr(5,2)],
+                            ));
+                            $last-yyyy-mm = $yyyy-mm;
+                        }
+                    }
+                    finish-year;
+
+                    my $first-date := @dates.head;
+                    my $last-date  := @dates.tail;
+                    $very-first-date min= $first-date;
+                    $very-last-date  max= $last-date;
+
                     Map.new((
-                      channel => $channel,
-                      year    => .key,
-                      months  => .value.sort(*.key).map: {
-                         Map.new((
-                            channel     => $channel,
-                            month       => .key,
-                            human-month =>
-                              @human-months[.key.substr(5,2)].substr(0,3),
-                         ))
-                      },
+                      divider          => "",
+                      active           => $clog.active,
+                      name             => $channel,
+                      description      => %!descriptions{$channel} // "",
+                      one-liner        => %!one-liners{$channel}   // "",
+                      years            => @years,
+                      start-date       => $last-date,
+                      end-date         => $last-date,
+                      first-date       => $first-date,
+                      first-human-date => human-date($first-date),
+                      last-date        => $last-date,
+                      last-human-date  => human-date($last-date),
+                      month            => $last-date.substr(0,7),
                     ))
                 }
-
-                my $first-date := @dates.head;
-                my $last-date  := @dates.tail;
-                $very-first-date min= $first-date;
-                $very-last-date  max= $last-date;
-
-                Map.new((
-                  active           => $clog.active,
-                  name             => $channel,
-                  years            => @years,
-                  start-date       => $last-date,
-                  end-date         => $last-date,
-                  first-date       => $first-date,
-                  first-human-date => human-date($first-date),
-                  last-date        => $last-date,
-                  last-human-date  => human-date($last-date),
-                  month            => $last-date.substr(0,7),
-                ))
             }
 
             my %params =
@@ -466,8 +507,12 @@ class App::IRC::Log:ver<0.0.32>:auth<zef:lizmat> {
 
             my %params =
               channel          => $channel,
+              active           => $clog.active,
               channels         => @!channels,
               description      => %!descriptions{$channel},
+              descriptions     => %!descriptions,
+              one-liner        => %!one-liners{$channel},
+              one-liners       => %!one-liners,
               years            => @years,
               start-date       => $last-date,
               end-date         => $last-date,
@@ -573,14 +618,19 @@ class App::IRC::Log:ver<0.0.32>:auth<zef:lizmat> {
         my $last-date := @dates.tail;
 
         %params =
-          channel    => $channel,
-          channels   => @!channels,
-          first-date => @dates.head,
-          last-date  => $last-date,
-          targets    => @targets,
-          elapsed    => $elapsed,
-          entries    => @entries,
-          month      => $last-date.substr(0,7),
+          channel      => $channel,
+          active       => $clog.active,
+          description  => %!descriptions{$channel},
+          descriptions => %!descriptions,
+          one-liner    => %!one-liners{$channel},
+          one-liners   => %!one-liners,
+          channels     => @!channels,
+          first-date   => @dates.head,
+          last-date    => $last-date,
+          targets      => @targets,
+          elapsed      => $elapsed,
+          entries      => @entries,
+          month        => $last-date.substr(0,7),
         ;
 
         if @entries {
@@ -704,28 +754,30 @@ class App::IRC::Log:ver<0.0.32>:auth<zef:lizmat> {
         my @dates     := $clog.dates;
         my $last-date := @dates.tail;
         my %params =
-          channel             => $channel,
-          channels            => @!channels,
-          date                => @dates.tail,
-          start-date          => @entries.head<date> // "",
-          end-date            => @entries.tail<date> // "",
-          first-date          => @dates.head,
-          last-date           => $last-date,
-          elapsed             => ((now - $then) * 1000).Int,
-          entries             => @entries,
-          entries-pp          => $entries-pp,
-          first-target        => @entries.head<target> // "",
-          last-target         => @entries.tail<target> // "",
-          nr-entries          => @entries.elems,
-          month               => $last-date.substr(0,7),
+          channel      => $channel,
+          active       => $clog.active,
+          channels     => @!channels.grep({ self.clog($_).active }).List,
+          date         => @dates.tail,
+          start-date   => @entries.head<date> // "",
+          end-date     => @entries.tail<date> // "",
+          first-date   => @dates.head,
+          last-date    => $last-date,
+          elapsed      => ((now - $then) * 1000).Int,
+          entries      => @entries,
+          entries-pp   => $entries-pp,
+          first-target => @entries.head<target> // "",
+          last-target  => @entries.tail<target> // "",
+          nr-entries   => @entries.elems,
+          month        => $last-date.substr(0,7),
         ;
+
         add-search-pulldown-values(%params);
         create-result($crot, %params, $json);
     }
 
     # Return content for searches
     method !search(
-       $channel,
+       $channel is copy,
       :$nicks         = "",
       :$entries-pp    = 25,
       :$type          = "words",
@@ -753,6 +805,8 @@ class App::IRC::Log:ver<0.0.32>:auth<zef:lizmat> {
         my $crot := self!template-for($channel, 'search');
         get-template-repository.refresh($crot.absolute)
           if $crot.modified > $!liftoff;
+
+        $channel   = @!channels.head unless $channel;
         my $clog  := self.clog($channel);
         my @dates := $clog.dates;
         my @years := $clog.years;
@@ -862,41 +916,46 @@ class App::IRC::Log:ver<0.0.32>:auth<zef:lizmat> {
         }
 
         %params =
-          all-words          => $all-words,
-          control            => $message-type eq "control",
-          conversation       => $message-type eq "conversation",
-          channel            => $channel,
-          channels           => @!channels,
-          dates              => $clog.dates,
-          elapsed            => ((now - $then) * 1000).Int,
-          entries            => @entries,
-          entries-pp         => $entries-pp,
-          start-date         => (@entries ?? @entries.head<date> !! ""),
-          end-date           => (@entries ?? @entries.tail<date> !! ""),
-          first-date         => $first-date,
-          first-human-date   => human-date($first-date),
-          from-day           => $from-day,
-          from-month         => $from-month,
-          from-year          => $from-year || @years.head,
-          from-yyyymmdd      => $from-yyyymmdd,
-          ignorecase         => $ignorecase,
-          include-aliases    => $include-aliases,
-          last-date          => $last-date,
-          last-human-date    => human-date($last-date),
-          message-type       => $message-type,
-          month              => $last-date.substr(0,7),
-          months             => @template-months,
-          more               => $more,
-          name               => $channel,
-          nicks              => $nicks,
-          nr-entries         => +@entries,
-          query              => $query || "",
-          to-day             => $to-day,
-          to-month           => $to-month,
-          to-year            => $to-year || @years.tail,
-          to-yyyymmdd        => $to-yyyymmdd,
-          type               => $type,
-          years              => @years,
+          all-words        => $all-words,
+          control          => $message-type eq "control",
+          conversation     => $message-type eq "conversation",
+          channel          => $channel,
+          active           => $clog.active,
+          channels         => @!channels,
+          description      => %!descriptions{$channel},
+          descriptions     => %!descriptions,
+          one-liner        => %!one-liners{$channel},
+          one-liners       => %!one-liners,
+          dates            => $clog.dates,
+          elapsed          => ((now - $then) * 1000).Int,
+          entries          => @entries,
+          entries-pp       => $entries-pp,
+          start-date       => (@entries ?? @entries.head<date> !! ""),
+          end-date         => (@entries ?? @entries.tail<date> !! ""),
+          first-date       => $first-date,
+          first-human-date => human-date($first-date),
+          from-day         => $from-day,
+          from-month       => $from-month,
+          from-year        => $from-year || @years.head,
+          from-yyyymmdd    => $from-yyyymmdd,
+          ignorecase       => $ignorecase,
+          include-aliases  => $include-aliases,
+          last-date        => $last-date,
+          last-human-date  => human-date($last-date),
+          message-type     => $message-type,
+          month            => $last-date.substr(0,7),
+          months           => @template-months,
+          more             => $more,
+          name             => $channel,
+          nicks            => $nicks,
+          nr-entries       => +@entries,
+          query            => $query || "",
+          to-day           => $to-day,
+          to-month         => $to-month,
+          to-year          => $to-year || @years.tail,
+          to-yyyymmdd      => $to-yyyymmdd,
+          type             => $type,
+          years            => @years,
         ;
         add-search-pulldown-values(%params);
         create-result($crot, %params, $json);
@@ -1067,7 +1126,7 @@ class App::IRC::Log:ver<0.0.32>:auth<zef:lizmat> {
 
     # Return the actual Cro application to be served
     method application() {
-        subset CHANNEL of Str where { $_ (elem) @!channels }
+        subset CHANNEL of Str where { %!clogs{$_}:exists }
 
         route {
 #            after { note .Str }   # show response headers
