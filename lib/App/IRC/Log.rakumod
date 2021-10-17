@@ -14,13 +14,18 @@ my constant @human-months = <?
   August September October November December
 >;
 
+# Month pulldown
+my constant @template-months = (1..12).map: {
+    $_ => @human-months[$_].substr(0,3)
+}
+
 # Turn a YYYY-MM-DD date into a human readable date
 sub human-date(str $date, str $del = ' ', :$short) {
     if $date {
-        my $chars := $short ?? 3 !! *;
+        my $month := @human-months[$date.substr(5,2)];
         $date.substr(8,2).Int
           ~ $del
-          ~ @human-months[$date.substr(5,2)].substr(0,$chars)
+          ~ ($short ?? $month.substr(0,3) !! $month)
           ~ $del
           ~ $date.substr(0,4)
     }
@@ -29,28 +34,12 @@ sub human-date(str $date, str $del = ' ', :$short) {
 # Turn a YYYY-MM-DD date into a human readable month
 sub human-month(str $date, str $del = ' ', :$short) {
     if $date {
-        my $chars := $short ?? 3 !! *;
-        @human-months[$date.substr(5,2)].substr(0,$chars)
+        my $month := @human-months[$date.substr(5,2)];
+        ($short ?? $month.substr(0,3) !! $month)
           ~ $del
           ~ $date.substr(0,4)
     }
 }
-
-# Month pulldown
-my constant @template-months =
-   1 => "Jan",
-   2 => "Feb",
-   3 => "Mar",
-   4 => "Apr",
-   5 => "May",
-   6 => "Jun",
-   7 => "Jul",
-   8 => "Aug",
-   9 => "Sep",
-  10 => "Oct",
-  11 => "Nov",
-  12 => "Dec",
-;
 
 # Default color generator
 sub generator($) {
@@ -84,7 +73,7 @@ my role Divider { has $.divider }
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.33>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.34>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -355,7 +344,7 @@ class App::IRC::Log:ver<0.0.33>:auth<zef:lizmat> {
                             @years[@years.elems] := Map.new((
                               channel => $channel,
                               year    => $last-yyyy-mm.substr(0,4),
-                              months  => @months.clone,
+                              months  => @months.List,
                             ));
                             @months = ();
                         }
@@ -372,7 +361,7 @@ class App::IRC::Log:ver<0.0.33>:auth<zef:lizmat> {
                               channel     => $channel,
                               month       => $yyyy-mm,
                               human-month =>
-                                @human-months[$yyyy-mm.substr(5,2)],
+                                @human-months[$yyyy-mm.substr(5,2)].substr(0,3),
                             ));
                             $last-yyyy-mm = $yyyy-mm;
                         }
@@ -464,7 +453,7 @@ class App::IRC::Log:ver<0.0.33>:auth<zef:lizmat> {
                       channel     => $channel,
                       month       => $last-yyyy-mm.clone,
                       human-month => @human-months[$last-yyyy-mm.substr(5,2)],
-                      dates       => @days.clone,
+                      dates       => @days.List,
                     ));
                     @days = ();
                 }
@@ -475,7 +464,7 @@ class App::IRC::Log:ver<0.0.33>:auth<zef:lizmat> {
                     @years[@years.elems] := Map.new((
                       channel => $channel,
                       year    => $last-yyyy-mm.substr(0,4),
-                      months  => @months.clone,
+                      months  => @months.List,
                     ));
                     @months = ();
                 }

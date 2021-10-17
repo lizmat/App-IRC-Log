@@ -2,6 +2,11 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.34  2021-10-17T15:32:47+02:00
+    - Reorganized some monthly constant building
+    - Optimized human date / month logic a bit
+    - Only use short names on home page
+
 0.0.33  2021-10-15T19:55:55+02:00
     - Add support for .one-liners
     - Further simplification of home page rendering hash
