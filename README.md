@@ -3,7 +3,7 @@
 NAME
 ====
 
-App::IRC::Log - Cro application for presentating IRC logs
+App::IRC::Log - Cro application for presenting IRC logs
 
 SYNOPSIS
 ========
