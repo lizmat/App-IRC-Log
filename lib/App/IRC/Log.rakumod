@@ -1278,7 +1278,7 @@ class App::IRC::Log:ver<0.0.34>:auth<zef:lizmat> {
 
 =head1 NAME
 
-App::IRC::Log - Cro application for presentating IRC logs
+App::IRC::Log - Cro application for presenting IRC logs
 
 =head1 SYNOPSIS
 
