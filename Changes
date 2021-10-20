@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.36  2021-10-20T17:28:11+02:00
+    - Fix thinko in scrolldown plugin handling
+
 0.0.35  2021-10-20T13:11:07+02:00
     - Add message plugins for each view that has messages
 

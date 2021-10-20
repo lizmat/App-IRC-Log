@@ -73,7 +73,7 @@ my role Divider { has $.divider }
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.35>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.36>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -687,8 +687,8 @@ class App::IRC::Log:ver<0.0.35>:auth<zef:lizmat> {
         @entries = self!ready-entries-for-template(
           @entries, $channel, $clog.colors, :short
         );
-        @entries.shift;  # drop the target
         self!run-plugins(@!scrolldown-plugins, @entries);
+        @entries.shift;  # drop the target
 
         my %params = :$channel, :@entries;
         create-result($crot, %params, $json);
