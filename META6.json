@@ -13,7 +13,7 @@
     "JSON::Fast:ver<0.16>",
     "RandomColor"
   ],
-  "description": "Cro application for presentating IRC logs",
+  "description": "Cro application for presenting IRC logs",
   "license": "Artistic-2.0",
   "name": "App::IRC::Log",
   "perl": "6.d",
@@ -29,5 +29,5 @@
     "Cro::HTTP::Server:ver<0.8.6>",
     "IRC::Log::Colabti:ver<0.0.35>:auth<zef:lizmat>"
   ],
-  "version": "0.0.34"
+  "version": "0.0.35"
 }

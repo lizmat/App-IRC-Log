@@ -73,7 +73,7 @@ my role Divider { has $.divider }
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.34>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.35>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -85,8 +85,11 @@ class App::IRC::Log:ver<0.0.34>:auth<zef:lizmat> {
     has         &.htmlize       is required;  # make HTML of message of entry
     has Instant $.liftoff is built(:bind) = $*INIT-INSTANT;
     has Str     @.channels = self.default-channels;  # channels to provide
-    has         @.live-plugins;  # any plugins for live
-    has         @.day-plugins;   # any plugins for day
+    has         @.live-plugins;        # any plugins for live view
+    has         @.day-plugins;         # any plugins for day view
+    has         @.gist-plugins;        # any plugins for gist view
+    has         @.scrollup-plugins;    # any plugins for scrollup messages
+    has         @.scrolldown-plugins;  # any plugins for scrolldown messages
     has         %.descriptions;  # long channel descriptions
     has         %.one-liners;    # short channel descriptions
     has         %!clogs;         # hash of IRC::Channel::Log objects
@@ -233,6 +236,17 @@ class App::IRC::Log:ver<0.0.34>:auth<zef:lizmat> {
         }
     }
 
+    # Run all the plugins
+    method !run-plugins(@plugins, @entries) {
+        if @entries {
+            for @plugins -> &plugin {
+                &plugin.returns ~~ Nil
+                  ?? plugin(@entries)
+                  !! (@entries = plugin(@entries))
+            }
+        }
+    }
+
     # Return IO object for given channel and day
     method !day($channel, $file --> IO:D) {
         my $date := $file.chop(5);
@@ -256,13 +270,7 @@ class App::IRC::Log:ver<0.0.34>:auth<zef:lizmat> {
             my @entries = self!ready-entries-for-template(
               $clog.log($date).entries, $channel, %colors
             );
-
-            # Run all the plugins
-            for @!day-plugins -> &plugin {
-                &plugin.returns ~~ Nil
-                  ?? plugin(@entries)
-                  !! (@entries = plugin(@entries))
-            }
+            self!run-plugins(@!day-plugins, @entries);
 
             # Set up parameters
             my %params =
@@ -593,17 +601,11 @@ class App::IRC::Log:ver<0.0.34>:auth<zef:lizmat> {
         %params<channel> := $channel;
         %params<targets> := @targets;
 
-        sub find-em() {
-            if $clog.entries(|%params) -> @found {
-                self!ready-entries-for-template(
-                  @found, $channel, $clog.colors, :short
-                )
-            }
-        }
+        my @entries = self!ready-entries-for-template(
+          $clog.entries(|%params), $channel, $clog.colors, :short
+        );
+        self!run-plugins(@!gist-plugins, @entries);
 
-        my $then     := now;
-        my @entries   = find-em;
-        my $elapsed  := ((now - $then) * 1000).Int;
         my $last-date := @dates.tail;
 
         %params =
@@ -617,7 +619,6 @@ class App::IRC::Log:ver<0.0.34>:auth<zef:lizmat> {
           first-date   => @dates.head,
           last-date    => $last-date,
           targets      => @targets,
-          elapsed      => $elapsed,
           entries      => @entries,
           month        => $last-date.substr(0,7),
         ;
@@ -652,13 +653,7 @@ class App::IRC::Log:ver<0.0.34>:auth<zef:lizmat> {
             .reverse,
           $channel, $clog.colors, :short
         );
-
-        # Run all the plugins
-        for @!live-plugins -> &plugin {
-            &plugin.returns ~~ Nil
-              ?? plugin(@entries)
-              !! (@entries = plugin(@entries))
-        }
+        self!run-plugins(@!scrollup-plugins, @entries);
 
         # Nothing before
         unless @entries {
@@ -693,13 +688,7 @@ class App::IRC::Log:ver<0.0.34>:auth<zef:lizmat> {
           @entries, $channel, $clog.colors, :short
         );
         @entries.shift;  # drop the target
-
-        # Run all the plugins
-        for @!live-plugins -> &plugin {
-            &plugin.returns ~~ Nil
-              ?? plugin(@entries)
-              !! (@entries = plugin(@entries))
-        }
+        self!run-plugins(@!scrolldown-plugins, @entries);
 
         my %params = :$channel, :@entries;
         create-result($crot, %params, $json);
@@ -732,13 +721,7 @@ class App::IRC::Log:ver<0.0.34>:auth<zef:lizmat> {
         my $then    := now;
         my @entries  = find-em;
         my $elapsed := ((now - $then) * 1000).Int;
-
-        # Run all the plugins
-        for @!live-plugins -> &plugin {
-            &plugin.returns ~~ Nil
-              ?? plugin(@entries)
-              !! (@entries = plugin(@entries))
-        }
+        self!run-plugins(@!live-plugins, @entries);
 
         my @dates     := $clog.dates;
         my $last-date := @dates.tail;

@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.35  2021-10-20T13:11:07+02:00
+    - Add message plugins for each view that has messages
+
 0.0.34  2021-10-17T15:32:47+02:00
     - Reorganized some monthly constant building
     - Optimized human date / month logic a bit
