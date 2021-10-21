@@ -73,7 +73,7 @@ my role Divider { has $.divider }
 # App::IRC::Log class
 #
 
-class App::IRC::Log:ver<0.0.36>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.37>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -87,6 +87,7 @@ class App::IRC::Log:ver<0.0.36>:auth<zef:lizmat> {
     has Str     @.channels = self.default-channels;  # channels to provide
     has         @.live-plugins;        # any plugins for live view
     has         @.day-plugins;         # any plugins for day view
+    has         @.search-plugins;      # any plugins for search view
     has         @.gist-plugins;        # any plugins for gist view
     has         @.scrollup-plugins;    # any plugins for scrollup messages
     has         @.scrolldown-plugins;  # any plugins for scrolldown messages
@@ -886,6 +887,7 @@ class App::IRC::Log:ver<0.0.36>:auth<zef:lizmat> {
             response.status = 204;
             return "";
         }
+        self!run-plugins(@!search-plugins, @entries);
 
         %params =
           all-words        => $all-words,
