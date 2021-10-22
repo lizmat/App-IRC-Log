@@ -71,9 +71,8 @@ my role Divider { has $.divider }
 
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
-#
 
-class App::IRC::Log:ver<0.0.37>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.38>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -83,6 +82,7 @@ class App::IRC::Log:ver<0.0.37>:auth<zef:lizmat> {
     has IO()    $.zip-dir;                    # saving zipped renderings
     has         &.colorize-nick is required;  # colorize a nick in HTML
     has         &.htmlize       is required;  # make HTML of message of entry
+    has         &.special-entry;              # optional special entry? checker
     has Instant $.liftoff is built(:bind) = $*INIT-INSTANT;
     has Str     @.channels = self.default-channels;  # channels to provide
     has         @.live-plugins;        # any plugins for live view
@@ -222,7 +222,7 @@ class App::IRC::Log:ver<0.0.37>:auth<zef:lizmat> {
             %hash<control>      := True if .control;
             if .conversation {
                 %hash<conversation>   := True;
-                %hash<self-reference> := True unless .sender;
+                %hash<self-reference> := .^name.ends-with('Self-Reference');
             }
             %hash<hh-mm> := $hhmm
               unless $hhmm eq $last-hhmm && $type == $last-type;
@@ -234,6 +234,25 @@ class App::IRC::Log:ver<0.0.37>:auth<zef:lizmat> {
             $last-nick = $type ?? "" !! $nick;
             $last-type = $type;
             %hash
+        }
+    }
+
+    # Make sure that no entry combining post-processing gets incomplete info
+    method !check-incomplete-special-entries(@entries) {
+        my $added;
+        with &!special-entry -> &is-special {
+            my $entry := @entries.head.prev;
+            my $ok-seen;
+            loop {
+                if $entry.conversation {
+                    $ok-seen = 0 if is-special($entry);
+                    @entries.unshift($entry);
+                    ++$added;
+                    return $added if ++$ok-seen == 3;
+                }
+
+                return $added unless $entry := $entry.prev;
+            }
         }
     }
 
@@ -558,17 +577,9 @@ class App::IRC::Log:ver<0.0.37>:auth<zef:lizmat> {
         %params<control>       := $control      if $control;
         %params<conversation>  := $conversation if $conversation;
 
-        sub find-em() {
-            if $clog.entries(|%params) -> @found {
-                self!ready-entries-for-template(
-                  @found, $channel, $clog.colors, :short
-                )
-            }
-        }
-
-        my $then    := now;
-        my @entries  = find-em;
-        my $elapsed := ((now - $then) * 1000).Int;
+        my @entries = self!ready-entries-for-template(
+           $clog.entries(|%params), $channel, $clog.colors, :short
+        );
 
         .<is-target> := True
           given @entries[@entries.first: *.<target> eq $target, :k];
@@ -578,7 +589,6 @@ class App::IRC::Log:ver<0.0.37>:auth<zef:lizmat> {
           channels => @!channels,
           dates    => $clog.dates,
           target   => $target,
-          elapsed  => $elapsed,
           entries  => @entries,
         ;
 
@@ -647,12 +657,16 @@ class App::IRC::Log:ver<0.0.37>:auth<zef:lizmat> {
         my $clog := self.clog($channel);
 
         # Get any additional entries
-        my @entries = self!ready-entries-for-template(
-          $clog
-            .entries(:conversation, :until-target($target))
-            .head($entries)
-            .reverse,
-          $channel, $clog.colors, :short
+        my @entries = $clog
+          .entries(:conversation, :until-target($target))
+          .head($entries)
+          .reverse
+          .eager;
+        self!check-incomplete-special-entries(@entries);
+
+        # Convert to hashes
+        @entries = self!ready-entries-for-template(
+          @entries, $channel, $clog.colors, :short
         );
         self!run-plugins(@!scrollup-plugins, @entries);
 
@@ -706,22 +720,19 @@ class App::IRC::Log:ver<0.0.37>:auth<zef:lizmat> {
           if $crot.modified > $!liftoff;
         my $clog := self.clog($channel);
 
-        sub find-em() {
-            if $clog.entries(
-              :conversation, :reverse
-            ).head($entries-pp) -> @found {
-                self!ready-entries-for-template(
-                  @found.reverse,
-                  $channel,
-                  $clog.colors,
-                  :short
-                )
-            }
-        }
+        # Obtain entries
+        my @entries = $clog
+          .entries(:conversation, :reverse)
+          .head($entries-pp)
+          .reverse
+          .eager;
+dd
+        self!check-incomplete-special-entries(@entries);
 
-        my $then    := now;
-        my @entries  = find-em;
-        my $elapsed := ((now - $then) * 1000).Int;
+        # Convert to hashes
+        @entries = self!ready-entries-for-template(
+          @entries, $channel, $clog.colors, :short
+        );
         self!run-plugins(@!live-plugins, @entries);
 
         my @dates     := $clog.dates;
@@ -735,7 +746,6 @@ class App::IRC::Log:ver<0.0.37>:auth<zef:lizmat> {
           end-date     => @entries.tail<date> // "",
           first-date   => @dates.head,
           last-date    => $last-date,
-          elapsed      => ((now - $then) * 1000).Int,
           entries      => @entries,
           entries-pp   => $entries-pp,
           first-target => @entries.head<target> // "",
