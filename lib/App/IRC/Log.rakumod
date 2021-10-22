@@ -72,7 +72,7 @@ my role Divider { has $.divider }
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
 
-class App::IRC::Log:ver<0.0.38>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.39>:auth<zef:lizmat> {
     has         $.log-class     is required;
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
@@ -218,12 +218,18 @@ class App::IRC::Log:ver<0.0.38>:auth<zef:lizmat> {
               sender          => &!colorize-nick($nick, %colors),
               target          => .target
             ;
-            %hash<same-nick>    := True if $nick && $nick eq $last-nick;
-            %hash<control>      := True if .control;
+            $nick && $nick eq $last-nick
+              ?? (%hash<same-nick> := True)
+              !! (%hash<initial>   := True);
+
+            %hash<control> := True if .control;
+
             if .conversation {
                 %hash<conversation>   := True;
-                %hash<self-reference> := .^name.ends-with('Self-Reference');
+                %hash<self-reference> := True
+                  if .^name.ends-with('Self-Reference');
             }
+
             %hash<hh-mm> := $hhmm
               unless $hhmm eq $last-hhmm && $type == $last-type;
             %hash<human-date> := human-date($date, "\xa0", :$short)
@@ -318,7 +324,7 @@ class App::IRC::Log:ver<0.0.38>:auth<zef:lizmat> {
               end-date     => $date,
               first-date   => @dates.head,
               last-date    => @dates.tail,
-              :@entries
+              entries      => @entries
             ;
 
             # Add topic related parameters if any

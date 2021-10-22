@@ -2,6 +2,10 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.39  2021-10-22T20:05:55+02:00
+    - Introduce "initial" tag for initial message in a range
+    - Some internal cleanups
+
 0.0.38  2021-10-22T12:36:49+02:00
     - Add initial support for "special-entry" checker
     - Small cleanups
