@@ -2,6 +2,12 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.40  2021-10-25T23:38:16+02:00
+    - Add support for "channel-class"
+    - Remove dependency on IRC::Channel::Log, it's now a parameter
+    - Some updated minimal documentation
+    - Fix support for "special-entry"
+
 0.0.39  2021-10-22T20:05:55+02:00
     - Introduce "initial" tag for initial message in a range
     - Some internal cleanups

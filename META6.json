@@ -9,7 +9,6 @@
     "Array::Sorted::Util:ver<0.0.7>:auth<zef:lizmat>",
     "Cro::HTTP::Router:ver<0.8.6>",
     "Cro::WebApp::Template:ver<0.8.6>",
-    "IRC::Channel::Log:ver<0.0.37>:auth<zef:lizmat>",
     "JSON::Fast:ver<0.16>",
     "RandomColor"
   ],
@@ -27,7 +26,7 @@
   ],
   "test-depends": [
     "Cro::HTTP::Server:ver<0.8.6>",
-    "IRC::Log::Colabti:ver<0.0.35>:auth<zef:lizmat>"
+    "IRC::Log::Colabti:ver<0.0.37>:auth<zef:lizmat>"
   ],
-  "version": "0.0.39"
+  "version": "0.0.40"
 }

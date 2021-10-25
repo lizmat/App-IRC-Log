@@ -4,7 +4,6 @@ use Array::Sorted::Util:ver<0.0.7>:auth<zef:lizmat>;
 use Cro::HTTP::Router:ver<0.8.6>;
 use Cro::WebApp::Template:ver<0.8.6>;
 use Cro::WebApp::Template::Repository:ver<0.8.6>;
-use IRC::Channel::Log:ver<0.0.37>:auth<zef:lizmat>;
 use JSON::Fast:ver<0.16>;
 use RandomColor;
 
@@ -72,8 +71,9 @@ my role Divider { has $.divider }
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
 
-class App::IRC::Log:ver<0.0.39>:auth<zef:lizmat> {
-    has         $.log-class     is required;
+class App::IRC::Log:ver<0.0.40>:auth<zef:lizmat> {
+    has         $.channel-class is required;  # IRC::Channel::Log compatible
+    has         $.log-class     is required;  # IRC::Log compatible
     has IO()    $.log-dir       is required;  # IRC-logs
     has IO()    $.static-dir    is required;  # static files, e.g. favicon.ico
     has IO()    $.template-dir  is required;  # templates
@@ -115,7 +115,6 @@ class App::IRC::Log:ver<0.0.39>:auth<zef:lizmat> {
     submethod TWEAK(
       :$batch = 16,
       :$degree = Kernel.cpu-cores/2,
-      :&channel-order,
     --> Nil) {
         my @problems;
         for
@@ -140,7 +139,7 @@ class App::IRC::Log:ver<0.0.39>:auth<zef:lizmat> {
         }
 
         %!clogs{$_} := start {  # start by storing the Promise
-            my $clog := IRC::Channel::Log.new:
+            my $clog := $!channel-class.new:
               logdir    => $!log-dir.add($_),
               class     => $!log-class,
               generator => &generator,
@@ -178,7 +177,7 @@ class App::IRC::Log:ver<0.0.39>:auth<zef:lizmat> {
 # Methods related to rendering
 
     # Return IRC::Channel::Log object for given channel
-    method clog(App::IRC::Log:D: str $channel --> IRC::Channel::Log:D) {
+    method clog(App::IRC::Log:D: str $channel) {
 
         # Even though this could be called from several threads
         # simultaneously, the key should always exist, so there
@@ -243,23 +242,41 @@ class App::IRC::Log:ver<0.0.39>:auth<zef:lizmat> {
         }
     }
 
-    # Make sure that no entry combining post-processing gets incomplete info
-    method !check-incomplete-special-entries(@entries) {
-        my $added;
-        with &!special-entry -> &is-special {
-            my $entry := @entries.head.prev;
-            my $ok-seen;
-            loop {
-                if $entry.conversation {
-                    $ok-seen = 0 if is-special($entry);
-                    @entries.unshift($entry);
-                    ++$added;
-                    return $added if ++$ok-seen == 3;
+    # Return the previous conversation entry for given clog and entry, if any
+    method !previous-conversation-entry($clog, $initial-entry) {
+        my $entry = $initial-entry.prev;
+        while $entry && !$entry.conversation {
+            $entry = $entry.prev;
+        }
+        unless $entry {
+            my $date := $clog.prev-date($initial-entry.date.Str);
+            while $date {
+                $entry = $clog.log($date).last-entry;
+                while $entry && !$entry.conversation {
+                    $entry = $entry.prev;
                 }
-
-                return $added unless $entry := $entry.prev;
+                $date := $entry
+                  ?? Nil
+                  !! $clog.prev-date($date);
             }
         }
+        $entry
+    }
+
+    # Make sure that no entry combining post-processing gets incomplete info
+    method !check-incomplete-special-entries($clog, @entries) {
+        my int $added;
+        with &!special-entry -> &is-special {
+            my $entry := @entries.head;
+            my int $ok-seen;
+            while ($entry := self!previous-conversation-entry($clog, $entry))
+              && $ok-seen < 3 {
+                @entries.unshift($entry);
+                is-special($entry) ?? ($ok-seen = 0) !! ++$ok-seen;
+                ++$added;
+            }
+        }
+        $added
     }
 
     # Run all the plugins
@@ -666,9 +683,9 @@ class App::IRC::Log:ver<0.0.39>:auth<zef:lizmat> {
         my @entries = $clog
           .entries(:conversation, :until-target($target))
           .head($entries)
-          .reverse
+          .reverse;
           .eager;
-        self!check-incomplete-special-entries(@entries);
+        self!check-incomplete-special-entries($clog, @entries);
 
         # Convert to hashes
         @entries = self!ready-entries-for-template(
@@ -732,8 +749,7 @@ class App::IRC::Log:ver<0.0.39>:auth<zef:lizmat> {
           .head($entries-pp)
           .reverse
           .eager;
-dd
-        self!check-incomplete-special-entries(@entries);
+        self!check-incomplete-special-entries($clog, @entries);
 
         # Convert to hashes
         @entries = self!ready-entries-for-template(
@@ -1288,7 +1304,8 @@ App::IRC::Log - Cro application for presenting IRC logs
 use App::IRC::Log;
 
 my $ail := App::IRC::Log.new:
-  :$log-class,
+  :$channel-class,  # IRC::Channel::Log compatible class
+  :$log-class,      # IRC::Log compatible class
   :$log-dir,
   :$rendered-dir,
   :$state-dir,
@@ -1297,8 +1314,16 @@ my $ail := App::IRC::Log.new:
   :$zip-dir,
   colorize-nick => &colorize-nick,
   htmlize       => &htmlize,
-  day-plugins   => day-plugins(),
+  special-entry => &special-entry,
   channels      => @channels,
+  live-plugins       => live-plugins(),
+  day-plugins        => day-plugins(),
+  search-plugins     => search-plugins(),
+  gist-plugins       => gist-plugins(),
+  scrollup-plugins   => scrollup-plugins(),
+  scrolldown-plugins => scrolldown-plugins(),
+  descriptions       => %descriptions,
+  one-liners         => %one-liners,
 ;
 
 my $service := Cro::HTTP::Server.new:

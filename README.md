@@ -12,7 +12,8 @@ SYNOPSIS
 use App::IRC::Log;
 
 my $ail := App::IRC::Log.new:
-  :$log-class,
+  :$channel-class,  # IRC::Channel::Log compatible class
+  :$log-class,      # IRC::Log compatible class
   :$log-dir,
   :$rendered-dir,
   :$state-dir,
@@ -21,8 +22,16 @@ my $ail := App::IRC::Log.new:
   :$zip-dir,
   colorize-nick => &colorize-nick,
   htmlize       => &htmlize,
-  day-plugins   => day-plugins(),
+  special-entry => &special-entry,
   channels      => @channels,
+  live-plugins       => live-plugins(),
+  day-plugins        => day-plugins(),
+  search-plugins     => search-plugins(),
+  gist-plugins       => gist-plugins(),
+  scrollup-plugins   => scrollup-plugins(),
+  scrolldown-plugins => scrolldown-plugins(),
+  descriptions       => %descriptions,
+  one-liners         => %one-liners,
 ;
 
 my $service := Cro::HTTP::Server.new:
