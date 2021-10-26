@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.41  2021-10-26T21:00:53+02:00
+    - Collect warnings from rendering in a less soiling manner
+
 0.0.40  2021-10-25T23:38:16+02:00
     - Add support for "channel-class"
     - Remove dependency on IRC::Channel::Log, it's now a parameter
