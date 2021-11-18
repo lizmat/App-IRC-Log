@@ -1,8 +1,9 @@
 .precomp/
 /App-IRC-Log-*
 /releases/
+/base
 /html/*
 /state/
 *.gz
-/logs
+/IRC-logs
 /1*

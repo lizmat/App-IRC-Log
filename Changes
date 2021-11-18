@@ -2,6 +2,15 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.42  2021-11-18T13:17:04+01:00
+    - Upped several dependencies
+    - Adapted to parameter changes in IRC::Channel::Log
+    - Now doesn't actually return until all of the logs have
+      been read.  This will slow down server startup a bit, but
+      since this is now about 25% faster, it may be less of an
+      issue, while it prevents any potential for segfaults by
+      unsafely accessing the channel logs hash.
+
 0.0.41  2021-10-26T21:00:53+02:00
     - Collect warnings from rendering in a less soiling manner
 

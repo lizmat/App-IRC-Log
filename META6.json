@@ -6,7 +6,7 @@
   "build-depends": [
   ],
   "depends": [
-    "Array::Sorted::Util:ver<0.0.7>:auth<zef:lizmat>",
+    "Array::Sorted::Util:ver<0.0.8>:auth<zef:lizmat>",
     "Cro::HTTP::Router:ver<0.8.6>",
     "Cro::WebApp::Template:ver<0.8.6>",
     "JSON::Fast:ver<0.16>",
@@ -26,7 +26,7 @@
   ],
   "test-depends": [
     "Cro::HTTP::Server:ver<0.8.6>",
-    "IRC::Log::Colabti:ver<0.0.37>:auth<zef:lizmat>"
+    "IRC::Log::Colabti:ver<0.0.44>:auth<zef:lizmat>"
   ],
-  "version": "0.0.41"
+  "version": "0.0.42"
 }

@@ -1,6 +1,4 @@
-use v6.*;
-
-use Array::Sorted::Util:ver<0.0.7>:auth<zef:lizmat>;
+use Array::Sorted::Util:ver<0.0.8>:auth<zef:lizmat>;
 use Cro::HTTP::Router:ver<0.8.6>;
 use Cro::WebApp::Template:ver<0.8.6>;
 use Cro::WebApp::Template::Repository:ver<0.8.6>;
@@ -58,20 +56,13 @@ sub add-search-pulldown-values(%params --> Nil) {
                              );
 }
 
-# Create result given template, parameters and json flag
-sub create-result($crot, %params, $json) {
-    $json
-      ?? to-json(%params,:!pretty)
-      !! render-template $crot, %params
-}
-
 # Role to mark channel names as divider or not
 my role Divider { has $.divider }
 
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
 
-class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.42>:auth<zef:lizmat> {
     has         $.channel-class is required;  # IRC::Channel::Log compatible
     has         $.log-class     is required;  # IRC::Log compatible
     has IO()    $.log-dir       is required;  # IRC-logs
@@ -113,9 +104,12 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
     # Start loading the logs asynchronously.  No need to be thread-safe
     # here as here will only be the thread creating the object.
     submethod TWEAK(
-      :$batch = 16,
-      :$degree = Kernel.cpu-cores/2,
+      :$degree is copy,
+      :$batch  is copy,
     --> Nil) {
+        $degree := Kernel.cpu-cores +> 1 without $degree;
+        $batch  := 16                    without $batch;
+
         my @problems;
         for
           :$!log-dir, :$!static-dir, :$!template-dir,
@@ -138,33 +132,38 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
             $_ but Divider(.starts-with('-') ?? .substr(1) !! "")
         }
 
-        %!clogs{$_} := start {  # start by storing the Promise
-            my $clog := $!channel-class.new:
-              logdir    => $!log-dir.add($_),
-              class     => $!log-class,
-              generator => &generator,
-              state     => $!state-dir.add($_),
-              name      => $_,
-              batch     => $batch,
-              degree    => $degree,
-            ;
+        for @!channels.race(:1batch, :$degree).map( {
+             unless .divider {  # dont do visual dividers
+                 my $clog := $!channel-class.new:
+                  logdir    => $!log-dir.add($_),
+                  class     => $!log-class,
+                  generator => &generator,
+                  state     => $!state-dir.add($_),
+                  name      => $_,
+                  batch     => $batch,
+                  degree    => $degree,
+                ;
 
-            # Monitor active channels for changes
-            if $clog.active {
-                my str $last-date = $clog.dates.tail;
-                my str $channel   = $clog.name;
-                my $home  := $!rendered-dir.add('home.html');
-                my $index := $!rendered-dir.add($channel).add('index.html');
-                $clog.watch-and-update: post-process => {
-                    if .date ne $last-date {
-                        .unlink for $index, $home;
-                        $last-date = .date.Str;
+                # Monitor active channels for changes
+                if $clog.active {
+                    my str $last-date = $clog.dates.tail;
+                    my str $channel   = $clog.name;
+                    my $home  := $!rendered-dir.add('home.html');
+                    my $index := $!rendered-dir.add($channel).add('index.html');
+                    $clog.watch-and-update: post-process => {
+                        if .date ne $last-date {
+                            .unlink for $index, $home;
+                            $last-date = .date;
+                        }
                     }
                 }
-            }
 
-            $clog  # the result of the Promise
-        } for @!channels.grep: !*.divider;
+                $clog
+            }
+        } ) {
+            say "Loaded $_.name()";
+            %!clogs{.name} := $_;
+        }
     }
 
     # Perform all actions associated with shutting down.
@@ -178,20 +177,7 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
 
     # Return IRC::Channel::Log object for given channel
     method clog(App::IRC::Log:D: str $channel) {
-
-        # Even though this could be called from several threads
-        # simultaneously, the key should always exist, so there
-        # is no danger of messing up the hash.  The only thing
-        # that can happen, is binding the result of the Promise
-        # more than once to the hash.
-        given %!clogs{$channel} {
-            if $_ ~~ Promise {
-                %!clogs{$channel} := .result  # not ready yet, will block
-            }
-            else {
-                $_ // Nil                     # ready, so go!
-            }
-        }
+        %!clogs{$channel} // Nil
     }
 
     # Set up entries for use in template
@@ -362,7 +348,7 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
             add-search-pulldown-values(%params);
 
             # Render it!
-            self!render: $!rendered-dir, $html, $crot, %params;
+            self!render-to-file: $!rendered-dir, $html, $crot, %params;
         }
         $html
     }
@@ -455,7 +441,7 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
               description      => %!descriptions<__home__> // "",
             ;
             add-search-pulldown-values(%params);
-            self!render: $!rendered-dir, $html, $crot, %params;
+            self!render-to-file: $!rendered-dir, $html, $crot, %params;
         }
         $html
     }
@@ -563,7 +549,7 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
             ;
             add-search-pulldown-values(%params);
 
-            self!render: $!rendered-dir, $html, $crot, %params;
+            self!render-to-file: $!rendered-dir, $html, $crot, %params;
         }
         $html
     }
@@ -615,7 +601,7 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
           entries  => @entries,
         ;
 
-        create-result($crot, %params, $json)
+        self!create-result($crot, %params, $json)
     }
 
     # Return content for gist helper
@@ -664,15 +650,15 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
             %params<month>      := $first-gist-date.substr(0,7);
         }
         add-search-pulldown-values(%params);
-        create-result($crot, %params, $json)
+        self!create-result($crot, %params, $json)
     }
 
     # Return content for scroll-up entries
     method !scroll-up(
-       $channel,
-      :$target!,
-      :$entries = 10,
-      :$json,      # return as JSON instead of HTML
+             $channel,
+            :$target!,
+      Int() :$entries = 10,
+            :$json,      # return as JSON instead of HTML
     --> Str:D) {
         my $crot := self!template-for($channel, 'additional');
         get-template-repository.refresh($crot.absolute)
@@ -681,10 +667,7 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
 
         # Get any additional entries
         my @entries = $clog
-          .entries(:conversation, :until-target($target))
-          .head($entries)
-          .reverse;
-          .eager;
+          .entries(:conversation, :le-target($target), :$entries, :reverse);
         self!check-incomplete-special-entries($clog, @entries);
 
         # Convert to hashes
@@ -700,7 +683,7 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
         }
 
         my %params = :$channel, :@entries;
-        create-result($crot, %params, $json);
+        self!create-result($crot, %params, $json);
     }
 
     # Return content for scroll-down entries
@@ -715,8 +698,9 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
         my $clog := self.clog($channel);
 
         # Get any additional entries
-        my @entries = $clog.entries(:conversation, :from-target($target));
+        my @entries = $clog.entries(:conversation, :ge-target($target));
         if @entries < 1 {  # after server restart, there could no entries yet
+            note "nothing to scroll-down with";
             response.status = 204;
             return "";
         }
@@ -729,7 +713,7 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
         @entries.shift;  # drop the target
 
         my %params = :$channel, :@entries;
-        create-result($crot, %params, $json);
+        self!create-result($crot, %params, $json);
     }
 
     # Return content for live channel view
@@ -744,11 +728,9 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
         my $clog := self.clog($channel);
 
         # Obtain entries
-        my @entries = $clog
-          .entries(:conversation, :reverse)
-          .head($entries-pp)
-          .reverse
-          .eager;
+        my @entries = $clog.entries(
+          :conversation, :entries($entries-pp), :reverse
+        );
         self!check-incomplete-special-entries($clog, @entries);
 
         # Convert to hashes
@@ -777,7 +759,7 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
         ;
 
         add-search-pulldown-values(%params);
-        create-result($crot, %params, $json);
+        self!create-result($crot, %params, $json);
     }
 
     # Return content for searches
@@ -850,35 +832,32 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
               unless $from-date eq $first-date && $to-date eq $last-date;
         }
 
-        my $moving;
-        my $produces-reversed;
+        my $moving  := False;
+        my $reverse := False;
         if $first {
             $moving := True;
         }
         elsif $last {
-            %params<reverse>   := True;
-            $produces-reversed := True;
-            $moving            := True;
+            $reverse := True;
+            $moving  := True;
         }
         elsif $prev && $first-target {
-            %params<before-target> := $first-target;
-            $produces-reversed     := True;
-            $moving                := True;
+            %params<lt-target> := $first-target;
+            $moving            := True;
         }
         elsif $next && $last-target {
-            %params<after-target> := $last-target;
-            $moving               := True;
+            %params<gt-target> := $last-target;
+            $moving            := True;
         }
         else {  # bare entry
-            %params<reverse>   := True;
-            $produces-reversed := True;
+            $reverse := True;
         }
 
         my str @errors;
         if $nicks {
             if $nicks.comb(/ \w+ /) -> @nicks {
                 if @nicks.map({ $clog.aliases-for-nick($_).Slip }) -> @aliases {
-                    %params<nicks> := $include-aliases ?? @aliases !! @nicks;
+                    %params<nick-names> := $include-aliases ?? @aliases !! @nicks;
                 }
                 else {
                     @errors.push: "'@nicks' not known as nick(s)";
@@ -897,24 +876,18 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
 
         my $more;
         sub find-em() {
-            my $fetch = $entries-pp + 1;
-            if $clog.entries(|%params).head($fetch) -> @found {
-                $more := @found == $fetch;
+            my $entries = $entries-pp + 1;
+            if $clog.entries(|%params, :$reverse, :$entries) -> @found {
+                if $more := @found == $entries {
+                    $reverse ?? @found.shift !! @found.pop;
+                }
                 self!ready-entries-for-template(
-                  $produces-reversed
-                    ?? @found.head($fetch).reverse
-                    !! @found.head($fetch),
-                  $channel,
-                  $clog.colors,
-                  :short
+                  @found, $channel, $clog.colors, :short
                 )
             }
         }
 
-        my $then    := now;
         my @entries  = find-em;
-        my $elapsed := ((now - $then) * 1000).Int;
-
         if !@entries && $moving {
             response.status = 204;
             return "";
@@ -933,7 +906,6 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
           one-liner        => %!one-liners{$channel},
           one-liners       => %!one-liners,
           dates            => $clog.dates,
-          elapsed          => ((now - $then) * 1000).Int,
           entries          => @entries,
           entries-pp       => $entries-pp,
           start-date       => (@entries ?? @entries.head<date> !! ""),
@@ -964,7 +936,7 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
           years            => @years,
         ;
         add-search-pulldown-values(%params);
-        create-result($crot, %params, $json);
+        self!create-result($crot, %params, $json);
     }
 
     proto method html(|) is implementation-detail {*}
@@ -990,7 +962,7 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
                                 | $crot.modified  # or template changed
             {
                 $dir.mkdir;
-                self!render: $!static-dir, $html, $crot, {
+                self!render-to-file: $!static-dir, $html, $crot, {
                   :$channel,
                 }
             }
@@ -1085,19 +1057,29 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
         my $path := $io-absolute.substr($base-dir.absolute.chars);
         my $gzip := $!zip-dir.add($path ~ '.gz');
         if !$gzip.e || $gzip.modified < $io.modified {
+            my \then := now;
             my $proc := run(
               'gzip', '--stdout', '--force', $io-absolute,
               :bin, :out
             );
             mkdir $gzip.parent;
             $gzip.spurt($proc.out.slurp, :bin);
+            note "{ ((now - then) * 1000).Int } msecs zipping";
         }
         $gzip
     }
 
+    # Render given template and parameters
+    method !render($crot, %params) {
+        my \then := now;
+        my $html := render-template $crot, %params;
+        note "{ ((now - then) * 1000).Int } msecs rendering $crot.basename()";
+        $html
+    }
+
     # Render text of given IO and template and make sure there is a
     # gzipped version for it as well if there's a place to store it
-    method !render(
+    method !render-to-file(
       IO:D $base-dir, IO:D $file, IO:D $crot, %params
     --> Nil) {
 
@@ -1115,7 +1097,7 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
                     .resume;
                 }
             }
-            $file.spurt: render-template $crot, %params;
+            $file.spurt: self!render($crot, %params);
             for %warnings.sort(*.key) -> (:key($message), :value($seen)) {
                 note $seen > 1
                   ?? $seen ~ "x $message"
@@ -1123,6 +1105,13 @@ class App::IRC::Log:ver<0.0.41>:auth<zef:lizmat> {
             }
         }
         self!gzip($base-dir, $file) if $!zip-dir;
+    }
+
+    # Create result given template, parameters and json flag
+    method !create-result($crot, %params, $json) {
+        $json
+          ?? to-json(%params,:!pretty)
+          !! self!render($crot, %params)
     }
 
     # Subsets for routing
