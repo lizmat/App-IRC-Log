@@ -2,6 +2,10 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.44  2021-11-18T22:12:36+01:00
+    - Bump Cro to 0.8.7
+    - Fix rendering of day for which there is no log file
+
 0.0.43  2021-11-18T14:24:28+01:00
     - Fix problem in search results
 

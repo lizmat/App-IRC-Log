@@ -1,7 +1,7 @@
 use Array::Sorted::Util:ver<0.0.8>:auth<zef:lizmat>;
-use Cro::HTTP::Router:ver<0.8.6>;
-use Cro::WebApp::Template:ver<0.8.6>;
-use Cro::WebApp::Template::Repository:ver<0.8.6>;
+use Cro::HTTP::Router:ver<0.8.7>;
+use Cro::WebApp::Template:ver<0.8.7>;
+use Cro::WebApp::Template::Repository:ver<0.8.7>;
 use JSON::Fast:ver<0.16>;
 use RandomColor;
 
@@ -62,7 +62,7 @@ my role Divider { has $.divider }
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
 
-class App::IRC::Log:ver<0.0.43>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.44>:auth<zef:lizmat> {
     has         $.channel-class is required;  # IRC::Channel::Log compatible
     has         $.log-class     is required;  # IRC::Log compatible
     has IO()    $.log-dir       is required;  # IRC-logs
@@ -187,7 +187,7 @@ class App::IRC::Log:ver<0.0.43>:auth<zef:lizmat> {
         my str $last-nick = "";
         my int $last-type = -1;
         entries.map: {
-            my str $date = .date.Str;
+            my str $date = .date;
             my str $hhmm = .hh-mm // "";
             my str $nick = .nick  // "";
             my int $type = .control.Int;
@@ -277,10 +277,9 @@ class App::IRC::Log:ver<0.0.43>:auth<zef:lizmat> {
     }
 
     # Return IO object for given channel and day
-    method !day($channel, $file --> IO:D) {
-        my $date := $file.chop(5);
+    method !day($channel, $date --> IO:D) {
         my $Date := $date.Date;
-        my $year := $Date.year;
+        my $year := $date.substr(0,4);
         my $log  := $!log-dir.add($channel).add($year).add($date);
         my $html := $!rendered-dir.add($channel).add($year).add("$date.html");
         my $crot := $!template-dir.add('day.crotmp');
@@ -1103,10 +1102,12 @@ class App::IRC::Log:ver<0.0.43>:auth<zef:lizmat> {
                 }
             }
             $file.spurt: self!render($crot, %params);
-            for %warnings.sort(*.key) -> (:key($message), :value($seen)) {
-                note $seen > 1
-                  ?? $seen ~ "x $message"
-                  !! $message;
+            if %warnings {
+                for %warnings.sort(*.key) -> (:key($message), :value($seen)) {
+                    note $seen > 1
+                      ?? $seen ~ "x $message"
+                      !! $message;
+                }
             }
         }
         self!gzip($base-dir, $file) if $!zip-dir;
@@ -1267,7 +1268,11 @@ class App::IRC::Log:ver<0.0.43>:auth<zef:lizmat> {
             }
 
             get -> CHANNEL $channel, DAY $file {
-                serve-static self!day($channel, $file);
+                my $clog := self.clog($channel);
+                my $date := $file.chop(5);
+                $clog.log($date)
+                  ?? serve-static self!day($channel, $date)
+                  !! redirect "/$channel/$clog.this-date($date).html";
             }
             get -> CHANNEL $channel, HTML $file {
                 serve-static self.html($channel, $file);
