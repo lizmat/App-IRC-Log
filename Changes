@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.43  2021-11-18T14:24:28+01:00
+    - Fix problem in search results
+
 0.0.42  2021-11-18T13:17:04+01:00
     - Upped several dependencies
     - Adapted to parameter changes in IRC::Channel::Log

@@ -62,7 +62,7 @@ my role Divider { has $.divider }
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
 
-class App::IRC::Log:ver<0.0.42>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.43>:auth<zef:lizmat> {
     has         $.channel-class is required;  # IRC::Channel::Log compatible
     has         $.log-class     is required;  # IRC::Log compatible
     has IO()    $.log-dir       is required;  # IRC-logs
@@ -878,11 +878,16 @@ class App::IRC::Log:ver<0.0.42>:auth<zef:lizmat> {
         sub find-em() {
             my $entries = $entries-pp + 1;
             if $clog.entries(|%params, :$reverse, :$entries) -> @found {
-                if $more := @found == $entries {
-                    $reverse ?? @found.shift !! @found.pop;
-                }
+                $more := @found == $entries;
                 self!ready-entries-for-template(
-                  @found, $channel, $clog.colors, :short
+                  $more
+                    ?? $reverse
+                      ?? @found.skip
+                      !! @found.head(*-1)
+                    !! @found,
+                  $channel,
+                  $clog.colors,
+                  :short
                 )
             }
         }
