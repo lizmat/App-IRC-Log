@@ -2,6 +2,12 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.45  2021-11-22T00:20:22+01:00
+    - Optimized scrollup / scrolldown handling in case of no data
+    - Centralized refresh of a template in a central place
+    - Implement backend functionality for search results scrollup
+      and scrolldown
+
 0.0.44  2021-11-18T22:12:36+01:00
     - Bump Cro to 0.8.7
     - Fix rendering of day for which there is no log file

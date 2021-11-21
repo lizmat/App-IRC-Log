@@ -62,7 +62,7 @@ my role Divider { has $.divider }
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
 
-class App::IRC::Log:ver<0.0.44>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.45>:auth<zef:lizmat> {
     has         $.channel-class is required;  # IRC::Channel::Log compatible
     has         $.log-class     is required;  # IRC::Log compatible
     has IO()    $.log-dir       is required;  # IRC-logs
@@ -448,9 +448,11 @@ class App::IRC::Log:ver<0.0.44>:auth<zef:lizmat> {
     method !template-for(str $channel, str $name) {
         my str $filename = $name ~ '.crotmp';
         my $crot := $!template-dir.add($channel).add($filename);
-        $crot.e
-          ?? $crot
-          !! $!template-dir.add: $filename
+        $crot := $!template-dir.add: $filename unless $crot.e;
+
+        get-template-repository.refresh($crot.absolute)
+          if $crot.modified > $!liftoff;
+        $crot
     }
 
     # Return an IO object for /channel/index.html
@@ -573,9 +575,6 @@ class App::IRC::Log:ver<0.0.44>:auth<zef:lizmat> {
       :$control,
       :$json,
     ) {
-        my $crot := self!template-for($channel, 'around');
-        get-template-repository.refresh($crot.absolute)
-          if $crot.modified > $!liftoff;
         my $clog := self.clog($channel);
 
         my %params;
@@ -600,7 +599,11 @@ class App::IRC::Log:ver<0.0.44>:auth<zef:lizmat> {
           entries  => @entries,
         ;
 
-        self!create-result($crot, %params, $json)
+        self!create-result(
+          self!template-for($channel, 'around'),
+          %params,
+          $json
+        )
     }
 
     # Return content for gist helper
@@ -610,8 +613,6 @@ class App::IRC::Log:ver<0.0.44>:auth<zef:lizmat> {
       :$json,
     ) {
         my $crot := self!template-for($channel, 'gist');
-        get-template-repository.refresh($crot.absolute)
-          if $crot.modified > $!liftoff;
         my $clog  := self.clog($channel);
         my @dates := $clog.dates;
 
@@ -659,30 +660,28 @@ class App::IRC::Log:ver<0.0.44>:auth<zef:lizmat> {
       Int() :$entries = 10,
             :$json,      # return as JSON instead of HTML
     --> Str:D) {
-        my $crot := self!template-for($channel, 'additional');
-        get-template-repository.refresh($crot.absolute)
-          if $crot.modified > $!liftoff;
         my $clog := self.clog($channel);
 
-        # Get any additional entries
-        my @entries = $clog
-          .entries(:conversation, :le-target($target), :$entries, :reverse);
-        self!check-incomplete-special-entries($clog, @entries);
+        if $clog.entries(
+          :conversation, :le-target($target), :$entries, :reverse
+        ) -> @entries is copy {
+            self!check-incomplete-special-entries($clog, @entries);
+            @entries = self!ready-entries-for-template(
+              @entries, $channel, $clog.colors, :short
+            );
+            self!run-plugins(@!scrollup-plugins, @entries);
 
-        # Convert to hashes
-        @entries = self!ready-entries-for-template(
-          @entries, $channel, $clog.colors, :short
-        );
-        self!run-plugins(@!scrollup-plugins, @entries);
-
-        # Nothing before
-        unless @entries {
+            self!create-result(
+              self!template-for($channel, 'additional'),
+              %(:$channel, :@entries),
+              $json
+            )
+        }
+        else {
             response.status = 204;
-            return "";
+            ""
         }
 
-        my %params = :$channel, :@entries;
-        self!create-result($crot, %params, $json);
     }
 
     # Return content for scroll-down entries
@@ -691,28 +690,29 @@ class App::IRC::Log:ver<0.0.44>:auth<zef:lizmat> {
       :$target!,
       :$json,      # return as JSON instead of HTML
     --> Str:D) {
-        my $crot := self!template-for($channel, 'additional');
-        get-template-repository.refresh($crot.absolute)
-          if $crot.modified > $!liftoff;
         my $clog := self.clog($channel);
 
         # Get any additional entries
         my @entries = $clog.entries(:conversation, :ge-target($target));
-        if @entries < 1 {  # after server restart, there could no entries yet
-            note "nothing to scroll-down with";
-            response.status = 204;
-            return "";
-        }
 
         # Ready the entries for the template
-        @entries = self!ready-entries-for-template(
-          @entries, $channel, $clog.colors, :short
-        );
-        self!run-plugins(@!scrolldown-plugins, @entries);
-        @entries.shift;  # drop the target
+        if @entries > 1 {
+            @entries = self!ready-entries-for-template(
+              @entries, $channel, $clog.colors, :short
+            );
+            self!run-plugins(@!scrolldown-plugins, @entries);
+            @entries.shift;  # drop the target
 
-        my %params = :$channel, :@entries;
-        self!create-result($crot, %params, $json);
+            self!create-result(
+              self!template-for($channel, 'additional'),
+              %(:$channel, :@entries),
+              $json
+            )
+        }
+        else {
+            response.status = 204;
+            ""
+        }
     }
 
     # Return content for live channel view
@@ -721,12 +721,7 @@ class App::IRC::Log:ver<0.0.44>:auth<zef:lizmat> {
       :$entries-pp = 50,
       :$json,      # return as JSON instead of HTML
     --> Str:D) {
-        my $crot := self!template-for($channel, 'live');
-        get-template-repository.refresh($crot.absolute)
-          if $crot.modified > $!liftoff;
         my $clog := self.clog($channel);
-
-        # Obtain entries
         my @entries = $clog.entries(
           :conversation, :entries($entries-pp), :reverse
         );
@@ -758,46 +753,36 @@ class App::IRC::Log:ver<0.0.44>:auth<zef:lizmat> {
         ;
 
         add-search-pulldown-values(%params);
-        self!create-result($crot, %params, $json);
+        self!create-result(
+          self!template-for($channel, 'live'),
+          %params,
+          $json
+        )
     }
 
     # Return content for searches
     method !search(
-       $channel is copy,
-      :$nicks         = "",
-      :$entries-pp    = 25,
-      :$type          = "words",
-      :$message-type  = "",  # control | conversation
-      :$query         = "",
-      :$from-yyyymmdd = "",
-      :$from-year     = "",
-      :$from-month    = "",
-      :$from-day      = "",
-      :$to-yyyymmdd   = "",
-      :$to-year       = "",
-      :$to-month      = "",
-      :$to-day        = "",
-      :$ignorecase    = "",
-      :$all-words     = "",
-      :$include-aliases = "",
-      :$first-target = "",
-      :$last-target  = "",
-      :$first = "",
-      :$last  = "",
-      :$prev  = "",
-      :$next  = "",
-      :$json,      # return as JSON instead of HTML
+             $channel is copy,
+            :$nicks         = "",
+      Int() :$entries-pp    = 25,
+            :$type          = "words",
+            :$message-type  = "",  # control | conversation
+            :$query         = "",
+            :$from-yyyymmdd = "",
+            :$to-yyyymmdd   = "",
+            :$ignorecase    = "",
+            :$all-words     = "",
+            :$include-aliases = "",
+            :$le-target  = "",
+            :$ge-target  = "",
+            :$json,      # return as JSON instead of HTML
     --> Str:D) {
-        my $crot := self!template-for($channel, 'search');
-        get-template-repository.refresh($crot.absolute)
-          if $crot.modified > $!liftoff;
-
         $channel   = @!channels.head unless $channel;
         my $clog  := self.clog($channel);
         my @dates := $clog.dates;
         my @years := $clog.years;
-        my $first-date := @dates.head // "";
-        my $last-date  := @dates.tail // "";
+        my str $first-date = @dates.head // "";
+        my str $last-date  = @dates.tail // "";
 
         # Initial setup of parameters to clog.entries
         my %params;
@@ -805,142 +790,116 @@ class App::IRC::Log:ver<0.0.44>:auth<zef:lizmat> {
         %params<ignorecase>    := True if $ignorecase;
         %params{$message-type} := True if $message-type;
 
-        # Look for any period limitation
-        my $from-date;
-        if $from-yyyymmdd {
-            $from-date = $from-yyyymmdd.Date;
+        my $scrolling := False;
+        my $reverse   := True;
+        if $le-target {
+            %params<le-target> := $le-target;
         }
-        elsif $from-year && $from-month && $from-day {
-            $from-date = Date.new($from-year, $from-month, $from-day) // Nil;
+        elsif $ge-target {
+            %params<ge-target> := $ge-target;
+            $reverse           := False;
         }
-        my $to-date;
-        if $to-yyyymmdd {
-            $to-date = $to-yyyymmdd.Date;
-        }
-        elsif $to-year && $to-month && $to-day {
-            $to-date = Date.new($to-year, $to-month, $to-day) // Nil;
-        }
-
-        # Handle period limitation
-        if $from-date || $to-date {
-            $from-date = @dates.head unless $from-date;
-            $to-date   = @dates.tail unless $to-date;
+        else {
+            # Handle period limitation
+            my str $from-date = $from-yyyymmdd || $first-date;
+            my str $to-date   = $to-yyyymmdd   || $last-date;
             ($from-date, $to-date) = ($to-date, $from-date)
-              if $to-date < $from-date;
+              if $to-date lt $from-date;
+            $from-date max= $first-date;
+            $to-date   min= $last-date;
+
             %params<dates> := $from-date.Date .. $to-date.Date
               unless $from-date eq $first-date && $to-date eq $last-date;
         }
 
-        my $moving  := False;
-        my $reverse := False;
-        if $first {
-            $moving := True;
-        }
-        elsif $last {
-            $reverse := True;
-            $moving  := True;
-        }
-        elsif $prev && $first-target {
-            %params<lt-target> := $first-target;
-            $moving            := True;
-        }
-        elsif $next && $last-target {
-            %params<gt-target> := $last-target;
-            $moving            := True;
-        }
-        else {  # bare entry
-            $reverse := True;
-        }
-
-        my str @errors;
         if $nicks {
             if $nicks.comb(/ \w+ /) -> @nicks {
                 if @nicks.map({ $clog.aliases-for-nick($_).Slip }) -> @aliases {
                     %params<nick-names> := $include-aliases ?? @aliases !! @nicks;
                 }
-                else {
-                    @errors.push: "'@nicks' not known as nick(s)";
-                }
             }
         }
 
-        if $query && $query.words -> @words {
+        if $query {
             if $type eq "words" | "contains" | "starts-with" {
-                %params{$type} := @words;
+                if $query.words -> @words {
+                    %params{$type} := @words;
+                }
             }
             elsif $type eq 'matches' {
                 %params<matches> := $_ with string2regex($query);
             }
         }
 
-        my $more;
         sub find-em() {
-            my $entries = $entries-pp + 1;
-            if $clog.entries(|%params, :$reverse, :$entries) -> @found {
-                $more := @found == $entries;
+            if $clog.entries(
+              |%params, :$reverse, :entries($entries-pp)
+            ) -> @found {
                 self!ready-entries-for-template(
-                  $more
-                    ?? $reverse
-                      ?? @found.skip
-                      !! @found.head(*-1)
-                    !! @found,
-                  $channel,
-                  $clog.colors,
-                  :short
+                  @found, $channel, $clog.colors, :short
                 )
             }
         }
 
-        my @entries  = find-em;
-        if !@entries && $moving {
-            response.status = 204;
-            return "";
-        }
+        my @entries = find-em;
         self!run-plugins(@!search-plugins, @entries);
+        if $le-target || $ge-target {
+            if @entries > 1 {
+                @entries.shift if $ge-target;  # drop the target
+                self!create-result(
+                  self!template-for($channel, 'additional'),
+                  %(:$channel, :@entries),
+                  $json
+                )
+            }
+            else {
+                response.status = 204;
+                return "";
+            }
+        }
+        else {
+            %params =
+              all-words        => $all-words,
+              control          => $message-type eq "control",
+              conversation     => $message-type eq "conversation",
+              channel          => $channel,
+              active           => $clog.active,
+              channels         => @!channels,
+              description      => %!descriptions{$channel},
+              descriptions     => %!descriptions,
+              one-liner        => %!one-liners{$channel},
+              one-liners       => %!one-liners,
+              dates            => @dates,
+              entries          => @entries,
+              entries-pp       => $entries-pp,
+              start-date       => (@entries ?? @entries.head<date> !! ""),
+              end-date         => (@entries ?? @entries.tail<date> !! ""),
+              first-date       => $first-date,
+              first-human-date => human-date($first-date),
+              from-yyyymmdd    => $from-yyyymmdd,
+              ignorecase       => $ignorecase,
+              include-aliases  => $include-aliases,
+              last-date        => $last-date,
+              last-human-date  => human-date($last-date),
+              message-type     => $message-type,
+              month            => $last-date.substr(0,7),
+              months           => @template-months,
+              name             => $channel,
+              nicks            => $nicks,
+              nr-entries       => +@entries,
+              query            => $query || "",
+              to-yyyymmdd      => $to-yyyymmdd,
+              type             => $type,
+              years            => @years,
+            ;
+            add-search-pulldown-values(%params);
 
-        %params =
-          all-words        => $all-words,
-          control          => $message-type eq "control",
-          conversation     => $message-type eq "conversation",
-          channel          => $channel,
-          active           => $clog.active,
-          channels         => @!channels,
-          description      => %!descriptions{$channel},
-          descriptions     => %!descriptions,
-          one-liner        => %!one-liners{$channel},
-          one-liners       => %!one-liners,
-          dates            => $clog.dates,
-          entries          => @entries,
-          entries-pp       => $entries-pp,
-          start-date       => (@entries ?? @entries.head<date> !! ""),
-          end-date         => (@entries ?? @entries.tail<date> !! ""),
-          first-date       => $first-date,
-          first-human-date => human-date($first-date),
-          from-day         => $from-day,
-          from-month       => $from-month,
-          from-year        => $from-year || @years.head,
-          from-yyyymmdd    => $from-yyyymmdd,
-          ignorecase       => $ignorecase,
-          include-aliases  => $include-aliases,
-          last-date        => $last-date,
-          last-human-date  => human-date($last-date),
-          message-type     => $message-type,
-          month            => $last-date.substr(0,7),
-          months           => @template-months,
-          more             => $more,
-          name             => $channel,
-          nicks            => $nicks,
-          nr-entries       => +@entries,
-          query            => $query || "",
-          to-day           => $to-day,
-          to-month         => $to-month,
-          to-year          => $to-year || @years.tail,
-          to-yyyymmdd      => $to-yyyymmdd,
-          type             => $type,
-          years            => @years,
-        ;
-        add-search-pulldown-values(%params);
-        self!create-result($crot, %params, $json);
+            self!create-result(
+              self!template-for($channel, 'search'),
+              %params,
+              $json
+            )
+        }
     }
 
     proto method html(|) is implementation-detail {*}
