@@ -43,6 +43,14 @@ sub generator($) {
     RandomColor.new(:luminosity<bright>).list.head
 }
 
+sub add-search-dates(%params, @dates --> Nil) {
+    my str $first-date = @dates.head // "";
+    my str $last-date  = @dates.tail // "";
+    %params<first-date> := $first-date;
+    %params<last-date>  := $last-date;
+    %params<from-yyyymmdd> := $first-date unless %params<from-yyyymmdd>;
+    %params<to-yyyymmdd>   := $last-date  unless %params<to-yyyymmdd>;
+}
 sub add-search-pulldown-values(%params --> Nil) {
     %params<entries-pp-options> := <25 50 100 250 500>;
     %params<message-options> := (""           => "all messages",
@@ -62,7 +70,7 @@ my role Divider { has $.divider }
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
 
-class App::IRC::Log:ver<0.0.45>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.46>:auth<zef:lizmat> {
     has         $.channel-class is required;  # IRC::Channel::Log compatible
     has         $.log-class     is required;  # IRC::Log compatible
     has IO()    $.log-dir       is required;  # IRC-logs
@@ -324,8 +332,6 @@ class App::IRC::Log:ver<0.0.45>:auth<zef:lizmat> {
                 !! $date.substr(0,4),
               start-date   => $date,
               end-date     => $date,
-              first-date   => @dates.head,
-              last-date    => @dates.tail,
               entries      => @entries
             ;
 
@@ -344,6 +350,7 @@ class App::IRC::Log:ver<0.0.45>:auth<zef:lizmat> {
                 %params<initial-topic-target> :=
                   $topic.target;
             }
+            add-search-dates(%params, @dates);
             add-search-pulldown-values(%params);
 
             # Render it!
@@ -434,6 +441,8 @@ class App::IRC::Log:ver<0.0.45>:auth<zef:lizmat> {
               last-human-date  => human-date($very-last-date),
               start-date       => $very-first-date,
               end-date         => $very-last-date,
+              from-yyyymmdd    => $very-first-date,
+              to-yyyymmdd      => $very-last-date,
               channel-info     => @channel-info,
               channel          => "",   # prevent warnings
               channels         => @!channels,
@@ -547,6 +556,8 @@ class App::IRC::Log:ver<0.0.45>:auth<zef:lizmat> {
               first-human-date => human-date($first-date),
               last-date        => $last-date,
               last-human-date  => human-date($last-date),
+              from-yyyymmdd    => $first-date,
+              to-yyyymmdd      => $last-date,
             ;
             add-search-pulldown-values(%params);
 
@@ -636,8 +647,6 @@ class App::IRC::Log:ver<0.0.45>:auth<zef:lizmat> {
           one-liner    => %!one-liners{$channel},
           one-liners   => %!one-liners,
           channels     => @!channels,
-          first-date   => @dates.head,
-          last-date    => $last-date,
           targets      => @targets,
           entries      => @entries,
           month        => $last-date.substr(0,7),
@@ -649,6 +658,7 @@ class App::IRC::Log:ver<0.0.45>:auth<zef:lizmat> {
             %params<end-date>   := @entries.tail<date>;
             %params<month>      := $first-gist-date.substr(0,7);
         }
+        add-search-dates(%params, @dates);
         add-search-pulldown-values(%params);
         self!create-result($crot, %params, $json)
     }
@@ -657,7 +667,7 @@ class App::IRC::Log:ver<0.0.45>:auth<zef:lizmat> {
     method !scroll-up(
              $channel,
             :$target!,
-      Int() :$entries = 10,
+      Int() :$entries = 15,
             :$json,      # return as JSON instead of HTML
     --> Str:D) {
         my $clog := self.clog($channel);
@@ -686,14 +696,19 @@ class App::IRC::Log:ver<0.0.45>:auth<zef:lizmat> {
 
     # Return content for scroll-down entries
     method !scroll-down(
-       $channel,
-      :$target!,
-      :$json,      # return as JSON instead of HTML
+             $channel,
+            :$target!,
+      Int() :$entries = 15,
+            :$json,      # return as JSON instead of HTML
     --> Str:D) {
         my $clog := self.clog($channel);
 
         # Get any additional entries
-        my @entries = $clog.entries(:conversation, :ge-target($target));
+        my @entries = $clog.entries(
+          :conversation,
+          :ge-target($target),
+          :$entries,
+        );
 
         # Ready the entries for the template
         if @entries > 1 {
@@ -742,8 +757,6 @@ class App::IRC::Log:ver<0.0.45>:auth<zef:lizmat> {
           date         => @dates.tail,
           start-date   => @entries.head<date> // "",
           end-date     => @entries.tail<date> // "",
-          first-date   => @dates.head,
-          last-date    => $last-date,
           entries      => @entries,
           entries-pp   => $entries-pp,
           first-target => @entries.head<target> // "",
@@ -752,6 +765,7 @@ class App::IRC::Log:ver<0.0.45>:auth<zef:lizmat> {
           month        => $last-date.substr(0,7),
         ;
 
+        add-search-dates(%params, @dates);
         add-search-pulldown-values(%params);
         self!create-result(
           self!template-for($channel, 'live'),
@@ -876,7 +890,7 @@ class App::IRC::Log:ver<0.0.45>:auth<zef:lizmat> {
               end-date         => (@entries ?? @entries.tail<date> !! ""),
               first-date       => $first-date,
               first-human-date => human-date($first-date),
-              from-yyyymmdd    => $from-yyyymmdd,
+              from-yyyymmdd    => $from-yyyymmdd || $first-date,
               ignorecase       => $ignorecase,
               include-aliases  => $include-aliases,
               last-date        => $last-date,
@@ -888,7 +902,7 @@ class App::IRC::Log:ver<0.0.45>:auth<zef:lizmat> {
               nicks            => $nicks,
               nr-entries       => +@entries,
               query            => $query || "",
-              to-yyyymmdd      => $to-yyyymmdd,
+              to-yyyymmdd      => $to-yyyymmdd || $last-date,
               type             => $type,
               years            => @years,
             ;
@@ -1252,7 +1266,8 @@ class App::IRC::Log:ver<0.0.45>:auth<zef:lizmat> {
                 serve-static self.html($file)
             }
 
-            get -> $file {
+            get -> $file, :%headers is header {
+#say "$_.key() => $_.value()" for %headers.sort(*.key);
                 serve-static $!static-dir.add($file)
             }
 
