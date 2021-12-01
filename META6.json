@@ -28,5 +28,5 @@
     "Cro::HTTP::Server:ver<0.8.6>",
     "IRC::Log::Colabti:ver<0.0.44>:auth<zef:lizmat>"
   ],
-  "version": "0.0.46"
+  "version": "0.0.47"
 }

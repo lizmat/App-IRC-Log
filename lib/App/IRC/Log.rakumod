@@ -70,7 +70,7 @@ my role Divider { has $.divider }
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
 
-class App::IRC::Log:ver<0.0.46>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.47>:auth<zef:lizmat> {
     has         $.channel-class is required;  # IRC::Channel::Log compatible
     has         $.log-class     is required;  # IRC::Log compatible
     has IO()    $.log-dir       is required;  # IRC-logs
@@ -828,7 +828,7 @@ class App::IRC::Log:ver<0.0.46>:auth<zef:lizmat> {
 
         if $nicks {
             if $nicks.comb(/ \w+ /) -> @nicks {
-                if @nicks.map({ $clog.aliases-for-nick($_).Slip }) -> @aliases {
+                if @nicks.map({ $clog.aliases-for-nick-name($_).Slip }) -> @aliases {
                     %params<nick-names> := $include-aliases ?? @aliases !! @nicks;
                 }
             }

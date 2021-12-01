@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.47  2021-12-01T16:13:17+01:00
+    - Fix issue in nick search
+
 0.0.46  2021-11-24T19:43:00+01:00
     - Allow number of entries parameter with scrolldown endpoint
     - Make sure from/to-yyyymmdd are always set.  Allows for
