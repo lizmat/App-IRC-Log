@@ -52,7 +52,6 @@ sub add-search-dates(%params, @dates --> Nil) {
     %params<to-yyyymmdd>   := $last-date  unless %params<to-yyyymmdd>;
 }
 sub add-search-pulldown-values(%params --> Nil) {
-    %params<entries-pp-options> := <25 50 100 250 500>;
     %params<message-options> := (""           => "all messages",
                                  conversation => "text only",
                                  control      => "control only",
@@ -70,7 +69,7 @@ my role Divider { has $.divider }
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
 
-class App::IRC::Log:ver<0.0.48>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.49>:auth<zef:lizmat> {
     has         $.channel-class is required;  # IRC::Channel::Log compatible
     has         $.log-class     is required;  # IRC::Log compatible
     has IO()    $.log-dir       is required;  # IRC-logs
@@ -671,10 +670,14 @@ class App::IRC::Log:ver<0.0.48>:auth<zef:lizmat> {
             :$json,      # return as JSON instead of HTML
     --> Str:D) {
         my $clog := self.clog($channel);
+        my @entries = $clog.entries(
+          :conversation,
+          :le-target($target),
+          :$entries,
+          :reverse
+        );
 
-        if $clog.entries(
-          :conversation, :le-target($target), :$entries, :reverse
-        ) -> @entries is copy {
+        if @entries > 1 {
             self!check-incomplete-special-entries($clog, @entries);
             @entries = self!ready-entries-for-template(
               @entries, $channel, $clog.colors, :short
@@ -787,6 +790,7 @@ class App::IRC::Log:ver<0.0.48>:auth<zef:lizmat> {
             :$ignorecase    = "",
             :$all-words     = "",
             :$include-aliases = "",
+            :$oldest-first  = "",
             :$le-target  = "",
             :$ge-target  = "",
             :$json,      # return as JSON instead of HTML
@@ -805,7 +809,7 @@ class App::IRC::Log:ver<0.0.48>:auth<zef:lizmat> {
         %params{$message-type} := True if $message-type;
 
         my $scrolling := False;
-        my $reverse   := True;
+        my $reverse   := not $oldest-first;
         if $le-target {
             %params<le-target> := $le-target;
         }
@@ -873,17 +877,15 @@ class App::IRC::Log:ver<0.0.48>:auth<zef:lizmat> {
         }
         else {
             %params =
+              active           => $clog.active,
               all-words        => $all-words,
+              channel          => $channel,
+              channels         => @!channels,
               control          => $message-type eq "control",
               conversation     => $message-type eq "conversation",
-              channel          => $channel,
-              active           => $clog.active,
-              channels         => @!channels,
+              dates            => @dates,
               description      => %!descriptions{$channel},
               descriptions     => %!descriptions,
-              one-liner        => %!one-liners{$channel},
-              one-liners       => %!one-liners,
-              dates            => @dates,
               entries          => @entries,
               entries-pp       => $entries-pp,
               start-date       => (@entries ?? @entries.head<date> !! ""),
@@ -901,6 +903,9 @@ class App::IRC::Log:ver<0.0.48>:auth<zef:lizmat> {
               name             => $channel,
               nicks            => $nicks,
               nr-entries       => +@entries,
+              oldest-first     => $oldest-first,
+              one-liner        => %!one-liners{$channel},
+              one-liners       => %!one-liners,
               query            => $query || "",
               to-yyyymmdd      => $to-yyyymmdd || $last-date,
               type             => $type,
