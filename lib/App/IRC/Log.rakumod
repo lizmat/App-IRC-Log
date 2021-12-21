@@ -2,6 +2,7 @@ use Array::Sorted::Util:ver<0.0.8>:auth<zef:lizmat>;
 use Cro::HTTP::Router:ver<0.8.7>;
 use Cro::WebApp::Template:ver<0.8.7>;
 use Cro::WebApp::Template::Repository:ver<0.8.7>;
+use highlighter:ver<0.0.1>:auth<zef:lizmat>;
 use JSON::Fast:ver<0.16>;
 use RandomColor;
 
@@ -69,7 +70,7 @@ my role Divider { has $.divider }
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
 
-class App::IRC::Log:ver<0.0.49>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.50>:auth<zef:lizmat> {
     has         $.channel-class is required;  # IRC::Channel::Log compatible
     has         $.log-class     is required;  # IRC::Log compatible
     has IO()    $.log-dir       is required;  # IRC-logs
@@ -89,6 +90,8 @@ class App::IRC::Log:ver<0.0.49>:auth<zef:lizmat> {
     has         @.gist-plugins;        # any plugins for gist view
     has         @.scrollup-plugins;    # any plugins for scrollup messages
     has         @.scrolldown-plugins;  # any plugins for scrolldown messages
+    has Str:D   $.highlight-before = "<strong>";
+    has Str:D   $.highlight-after  = "</strong>";
     has         %.descriptions;  # long channel descriptions
     has         %.one-liners;    # short channel descriptions
     has         %!clogs;         # hash of IRC::Channel::Log objects
@@ -838,6 +841,7 @@ class App::IRC::Log:ver<0.0.49>:auth<zef:lizmat> {
             }
         }
 
+        my $regex;
         if $query {
             if $type eq "words" | "contains" | "starts-with" {
                 if $query.words -> @words {
@@ -845,7 +849,7 @@ class App::IRC::Log:ver<0.0.49>:auth<zef:lizmat> {
                 }
             }
             elsif $type eq 'matches' {
-                %params<matches> := $_ with string2regex($query);
+                %params<matches> := $_ with $regex := string2regex($query);
             }
         }
 
@@ -861,6 +865,30 @@ class App::IRC::Log:ver<0.0.49>:auth<zef:lizmat> {
 
         my @entries = find-em;
         self!run-plugins(@!search-plugins, @entries);
+
+        # highlighting needed?
+        if $query {
+            if $type eq "words" | "contains" | "starts-with" {
+                if $query.words -> @words {
+                    for @words -> $word {
+                        for @entries -> %entry {
+                            %entry<message> := highlighter
+                              %entry<message>, $word,
+                              $!highlight-before, $!highlight-after,
+                              :$type, :$ignorecase;
+                        }
+                    }
+                }
+            }
+            elsif $type eq 'matches' {
+                for @entries -> %entry {
+                    %entry<message> := highlighter
+                      %entry<message>, $regex,
+                      $!highlight-before, $!highlight-after;
+                }
+            }
+        }
+
         if $le-target || $ge-target {
             if @entries > 1 {
                 @entries.shift if $ge-target;  # drop the target
@@ -1317,6 +1345,8 @@ my $ail := App::IRC::Log.new:
   scrolldown-plugins => scrolldown-plugins(),
   descriptions       => %descriptions,
   one-liners         => %one-liners,
+  highlight-before   => "<strong>",
+  highlight-after    => "</strong>",
 ;
 
 my $service := Cro::HTTP::Server.new:

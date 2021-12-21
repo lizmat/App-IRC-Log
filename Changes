@@ -2,6 +2,11 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.50  2021-12-21T23:53:21+01:00
+    - Add dependency on "highlighter"
+    - Add "highlight-before" and "highlight-after" attributes
+    - Add highlighting to search results
+
 0.0.49  2021-12-02T20:26:10+01:00
     - Add support for "oldest-first" parameter in search endpoint
     - Remove support for entries-pp-options, no longer needed

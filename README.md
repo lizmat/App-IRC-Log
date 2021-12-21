@@ -32,6 +32,8 @@ my $ail := App::IRC::Log.new:
   scrolldown-plugins => scrolldown-plugins(),
   descriptions       => %descriptions,
   one-liners         => %one-liners,
+  highlight-before   => "<strong>",
+  highlight-after    => "</strong>",
 ;
 
 my $service := Cro::HTTP::Server.new:
