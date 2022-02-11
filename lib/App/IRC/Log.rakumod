@@ -1,9 +1,9 @@
-use Array::Sorted::Util:ver<0.0.8>:auth<zef:lizmat>;
+use Array::Sorted::Util:ver<0.0.9>:auth<zef:lizmat>;
 use Cro::HTTP::Router:ver<0.8.7>;
 use Cro::WebApp::Template:ver<0.8.7>;
 use Cro::WebApp::Template::Repository:ver<0.8.7>;
 use highlighter:ver<0.0.1>:auth<zef:lizmat>;
-use JSON::Fast:ver<0.16>;
+use JSON::Fast:ver<0.17>;
 use RandomColor;
 
 # Array for humanizing dates
@@ -70,7 +70,7 @@ my role Divider { has $.divider }
 #-------------------------------------------------------------------------------
 # App::IRC::Log class
 
-class App::IRC::Log:ver<0.0.50>:auth<zef:lizmat> {
+class App::IRC::Log:ver<0.0.51>:auth<zef:lizmat> {
     has         $.channel-class is required;  # IRC::Channel::Log compatible
     has         $.log-class     is required;  # IRC::Log compatible
     has IO()    $.log-dir       is required;  # IRC-logs

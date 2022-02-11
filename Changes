@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.51  2022-02-11T18:10:02+01:00
+    - Upped dependencies
+
 0.0.50  2021-12-21T23:53:21+01:00
     - Add dependency on "highlighter"
     - Add "highlight-before" and "highlight-after" attributes
