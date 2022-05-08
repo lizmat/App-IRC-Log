@@ -27,7 +27,7 @@
   ],
   "test-depends": [
     "Cro::HTTP::Server:ver<0.8.7>",
-    "IRC::Log::Colabti:ver<0.0.50>:auth<zef:lizmat>"
+    "IRC::Log::Colabti:ver<0.0.51>:auth<zef:lizmat>"
   ],
-  "version": "0.0.51"
+  "version": "0.0.52"
 }

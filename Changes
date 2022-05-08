@@ -2,6 +2,9 @@ Revision history for App-IRC-Log
 
 {{$NEXT}}
 
+0.0.52  2022-05-08T15:51:11+02:00
+    - Upped dependencies
+
 0.0.51  2022-02-11T18:10:02+01:00
     - Upped dependencies
 
