@@ -570,7 +570,7 @@ class App::IRC::Log:ver<0.0.52>:auth<zef:lizmat> {
 
     # Convert a string to a regex that stringifies as the string
     sub string2regex(Str:D $string) {
-        if $string.contains('{') {   # XXX naive security check
+        if $string.contains('{') | '$(' {   # XXX naive security check
             Nil
         }
         else {
