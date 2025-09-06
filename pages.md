@@ -8,14 +8,10 @@ lives in the channel's static or template directory.
 
 Lists the years / months of which there are logs available.
 
-More or less functional now.
-
 ## /search.html
 
 The general search page.  Contains all of the possible filter possibilities.
 Search results to always be shown in ascending chronological order.
-
-Completely functional backend-wise.
 
 User-interface features:
 - show N lines around given line (/channel/around.html endpoint)
@@ -40,8 +36,6 @@ The raw log of the given channel and date, in IRC::Log::Colabti format.
 
 The conceptual page for a given date.  This is the place where all historical
 references should go to.
-
-Completely functional backend-wise.
 
 Links to:
 - search.html

@@ -1,6 +1,10 @@
 use Test;
 use App::IRC::Log;
 
-pass "replace me";
+plan 1;
 
-done-testing;
+# Testing is pretty tricky, so just test implicitely whether the module
+# could be loaded
+pass "Module loaded";
+
+# vim: expandtab shiftwidth=4
