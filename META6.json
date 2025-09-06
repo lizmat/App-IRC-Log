@@ -3,6 +3,8 @@
   "authors": [
     "Elizabeth Mattijsen"
   ],
+  "build-depends": [
+  ],
   "depends": {
     "runtime": {
       "requires": [
@@ -30,6 +32,9 @@
     "App::IRC::Log": "lib/App/IRC/Log.rakumod"
   },
   "raku": "6.d",
+  "resources": [
+  ],
+  "source-url": "https://github.com/lizmat/App-IRC-Log.git",
   "support": {
     "bugtracker": "https://github.com/lizmat/App-IRC-Log/issues",
     "email": "liz@raku.rocks",
@@ -37,5 +42,7 @@
   },
   "tags": [
   ],
-  "version": "0.0.52"
+  "test-depends": [
+  ],
+  "version": "0.0.53"
 }

@@ -1,6 +1,8 @@
 Revision history for App-IRC-Log
 
 {{$NEXT}}
+
+0.0.53  2025-09-06T17:23:07+02:00
     - Up dependencies
     - Add CI badge for each OS
     - Update copyright year

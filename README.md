@@ -1,4 +1,4 @@
-[![Actions Status](https://github.com/lizmat/App-IRC-Log/workflows/test/badge.svg)](https://github.com/lizmat/App-IRC-Log/actions)
+[![Actions Status](https://github.com/lizmat/App-IRC-Log/actions/workflows/linux.yml/badge.svg)](https://github.com/lizmat/App-IRC-Log/actions) [![Actions Status](https://github.com/lizmat/App-IRC-Log/actions/workflows/macos.yml/badge.svg)](https://github.com/lizmat/App-IRC-Log/actions) [![Actions Status](https://github.com/lizmat/App-IRC-Log/actions/workflows/windows.yml/badge.svg)](https://github.com/lizmat/App-IRC-Log/actions)
 
 NAME
 ====
@@ -52,11 +52,11 @@ react whenever signal(SIGINT) {
 DESCRIPTION
 ===========
 
-App::IRC::Log is a class for implementing an application to show IRC logs.
+The `App::IRC::Log` distribution provides an `App::IRC::Log` class for implementing an application to show IRC logs.
 
 It is still heavily under development and may change its interface at any time.
 
-It is currently being used to set up a website for showing the historical IRC logs of the development of the Raku Programming Language (see `App::Raku::Log`).
+It is currently being used at [the Raku IRC Logs server](https://irclogs.raku.org).
 
 AUTHOR
 ======
@@ -65,10 +65,12 @@ Elizabeth Mattijsen <liz@raku.rocks>
 
 Source can be located at: https://github.com/lizmat/App-IRC-Log . Comments and Pull Requests are welcome.
 
+If you like this module, or what I'm doing more generally, committing to a [small sponsorship](https://github.com/sponsors/lizmat/) would mean a great deal to me!
+
 COPYRIGHT AND LICENSE
 =====================
 
-Copyright 2021 Elizabeth Mattijsen
+Copyright 2021, 2022, 2025 Elizabeth Mattijsen
 
 This library is free software; you can redistribute it and/or modify it under the Artistic License 2.0.
 
