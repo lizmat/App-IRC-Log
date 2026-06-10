@@ -1,6 +1,8 @@
 Revision history for App-IRC-Log
 
 {{$NEXT}}
+
+0.0.54  2026-06-10T12:07:40+02:00
     - Up dependencies
     - Update copyright year
 
