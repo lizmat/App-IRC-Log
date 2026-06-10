@@ -1,9 +1,9 @@
 use Array::Sorted::Util:ver<0.0.11+>:auth<zef:lizmat>;  # finds
-use Cro::HTTP::Router:ver<0.8.11+>;
+use Cro::HTTP::Router:ver<0.8.13+>;
 use Cro::WebApp::Template:ver<0.10.0+>;              # render-template
 use Cro::WebApp::Template::Repository:ver<0.10.0+>;  # get-template-repository
-use highlighter:ver<0.0.22+>:auth<zef:lizmat> <highlighter>;
-use JSON::Fast:ver<0.19+>:auth<cpan:TIMOTIMO>;       # to-json
+use highlighter:ver<0.0.23+>:auth<zef:lizmat> <highlighter>;
+use JSON::Fast:ver<0.20+>:auth<zef:timo>;            # to-json
 use RandomColor;
 
 # Array for humanizing dates
